@@ -3,18 +3,30 @@
 const express = require('express');
 const path = require('path');
 const { execFile, spawn } = require('child_process');
-const { searchAnime, getSuggestions, getAnimeDesc, getEpisodes, getStreamLinks, smartFetchMetadata, resolveAnidbId } = require('./anidb');
-const { readHistory, updateHistory, clearHistory, removeFromHistory } = require('./history');
+const {
+  AGENT,
+  CIPHERS,
+  TLS13_CIPHERS,
+  searchAnime,
+  getSuggestions,
+  getAnimeDesc,
+  getEpisodes,
+  getStreamLinks,
+  smartFetchMetadata,
+  resolveAnidbId,
+  anidbFetch
+} = require('./anidb');
+const {
+  readHistory,
+  updateHistory,
+  saveExactProgress,
+  getProgress,
+  clearHistory,
+  removeFromHistory
+} = require('./history');
 
-const AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-
-function curlFetch(url) {
-  return new Promise((resolve, reject) => {
-    execFile('curl', ['-sL', '--compressed', '-A', AGENT, '--max-time', '30', '--retry', '2', '--retry-delay', '1', url],
-      { maxBuffer: 20 * 1024 * 1024 },
-      (err, stdout) => err ? reject(err) : resolve(stdout)
-    );
-  });
+function curlFetch(url, timeoutSec = 30) {
+  return anidbFetch(url, timeoutSec);
 }
 
 const app = express();
@@ -23,16 +35,16 @@ const PORT = process.env.PORT || 7474;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// ─── FEATURED & SUGGESTIONS ───────────────────────────────────────────────
+// ─── FEATURED ITEMS ─────────────────────────────────────────────────────────
 
 const FEATURED_ITEMS = [
   { id: 'solo-leveling-season-2-arise-from-the-shadow-4884', title: 'Solo Leveling Season 2', search: 'Solo Leveling Season 2' },
   { id: 'solo-leveling-4883', title: 'Solo Leveling Season 1', search: 'Solo Leveling' },
-  { id: 'one-piece-3880', title: 'One Piece', search: 'One Piece' },
+  { id: 'attack-on-titan-457', title: 'Attack on Titan', search: 'Attack on Titan' },
   { id: 'demon-slayer-kimetsu-no-yaiba-1217', title: 'Demon Slayer: Kimetsu no Yaiba', search: 'Demon Slayer' },
   { id: 'jujutsu-kaisen-2552', title: 'Jujutsu Kaisen', search: 'Jujutsu Kaisen' },
-  { id: 'attack-on-titan-457', title: 'Attack on Titan', search: 'Attack on Titan' },
   { id: 'chainsaw-man-922', title: 'Chainsaw Man', search: 'Chainsaw Man' },
+  { id: 'one-piece-3880', title: 'One Piece', search: 'One Piece' },
   { id: 'kaiju-no-8-2608', title: 'Kaiju No. 8', search: 'Kaiju No. 8' },
 ];
 
@@ -50,13 +62,17 @@ app.get('/api/featured', async (req, res) => {
         format: meta?.format || 'TV',
         description: meta?.description || '',
         genres: meta?.genres || ['Action', 'Fantasy'],
+        duration: meta?.duration || '24m',
       };
     }));
     res.json({ featured: list });
   } catch (err) {
+    console.error('[featured error]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
+// ─── SEARCH & SUGGESTIONS ──────────────────────────────────────────────────
 
 app.get('/api/suggestions', async (req, res) => {
   const { q } = req.query;
@@ -78,12 +94,12 @@ app.get('/api/search', async (req, res) => {
     const results = await searchAnime(q.trim());
     res.json({ results });
   } catch (err) {
-    console.error('[search]', err.message);
+    console.error('[search error]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// ─── ANIME DETAIL ────────────────────────────────────────────────────────────
+// ─── ANIME DETAIL ──────────────────────────────────────────────────────────
 
 app.get('/api/anime/:animeId', async (req, res) => {
   const rawId = req.params.animeId;
@@ -93,14 +109,15 @@ app.get('/api/anime/:animeId', async (req, res) => {
       getAnimeDesc(animeId),
       getEpisodes(animeId),
     ]);
-    res.json({ animeId, ...desc, episodes });
+    const progress = getProgress(animeId);
+    res.json({ animeId, ...desc, episodes, progress });
   } catch (err) {
-    console.error('[anime detail]', err.message);
+    console.error('[anime detail error]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// ─── EPISODES ────────────────────────────────────────────────────────────────
+// ─── EPISODES ──────────────────────────────────────────────────────────────
 
 app.get('/api/episodes/:animeId', async (req, res) => {
   const rawId = req.params.animeId;
@@ -109,12 +126,12 @@ app.get('/api/episodes/:animeId', async (req, res) => {
     const episodes = await getEpisodes(animeId);
     res.json({ animeId, episodes });
   } catch (err) {
-    console.error('[episodes]', err.message);
+    console.error('[episodes error]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// ─── STREAM LINKS ────────────────────────────────────────────────────────────
+// ─── STREAM LINKS ──────────────────────────────────────────────────────────
 
 app.get('/api/stream/:episodeId', async (req, res) => {
   const { episodeId } = req.params;
@@ -123,45 +140,77 @@ app.get('/api/stream/:episodeId', async (req, res) => {
     const links = await getStreamLinks(episodeId, lang);
     res.json({ links });
   } catch (err) {
-    console.error('[stream]', err.message);
+    console.error('[stream error]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// ─── HISTORY ─────────────────────────────────────────────────────────────────
+// ─── HISTORY & PLAYBACK PROGRESS ───────────────────────────────────────────
 
 app.get('/api/history', async (req, res) => {
   try {
     const rawHistory = readHistory();
-    const enriched = await Promise.all(rawHistory.map(async entry => {
-      let cover = entry.cover;
-      let banner = entry.banner;
+    const enriched = [];
+    for (const entry of rawHistory) {
+      const meta = await smartFetchMetadata(entry.animeId, entry.animeTitle);
+      const cover = entry.cover || meta?.coverImage || null;
+      const banner = entry.banner || meta?.bannerImage || meta?.coverImage || null;
+      const animeTitle = meta?.matchedTitle || entry.animeTitle.replace(/\s*\(\s*\d+\s*episodes?\s*\)/gi, '').trim();
 
-      if (!cover || !banner) {
-        const meta = await smartFetchMetadata(entry.animeId, entry.animeTitle);
-        cover = cover || meta?.coverImage || null;
-        banner = banner || meta?.bannerImage || meta?.coverImage || null;
-      }
-
-      return { ...entry, cover, banner };
-    }));
+      enriched.push({
+        ...entry,
+        animeTitle,
+        cover,
+        banner
+      });
+    }
     res.json({ history: enriched });
   } catch (err) {
-    console.error('[history]', err.message);
+    console.error('[history error]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 app.post('/api/history', (req, res) => {
-  const { episodeNumber, animeId, animeTitle, cover, banner } = req.body;
+  const { episodeNumber, animeId, animeTitle, cover, banner, currentTime, duration } = req.body;
   if (!episodeNumber || !animeId || !animeTitle) {
     return res.status(400).json({ error: 'episodeNumber, animeId, animeTitle required' });
   }
   try {
-    updateHistory(episodeNumber, animeId, animeTitle, cover || '', banner || '');
+    updateHistory(
+      episodeNumber,
+      animeId,
+      animeTitle,
+      cover || '',
+      banner || '',
+      currentTime || 0,
+      duration || 0
+    );
     res.json({ ok: true });
   } catch (err) {
-    console.error('[history update]', err.message);
+    console.error('[history update error]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/progress/:animeId', (req, res) => {
+  try {
+    const prog = getProgress(req.params.animeId);
+    res.json({ progress: prog });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/progress', (req, res) => {
+  const { animeId, episodeNumber, currentTime, duration, cover, banner } = req.body;
+  if (!animeId) {
+    return res.status(400).json({ error: 'animeId required' });
+  }
+  try {
+    saveExactProgress(animeId, episodeNumber, currentTime, duration, cover, banner);
+    res.json({ ok: true });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -171,7 +220,7 @@ app.delete('/api/history', (req, res) => {
     clearHistory();
     res.json({ ok: true });
   } catch (err) {
-    console.error('[history clear]', err.message);
+    console.error('[history clear error]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -181,12 +230,12 @@ app.delete('/api/history/:animeId', (req, res) => {
     removeFromHistory(req.params.animeId);
     res.json({ ok: true });
   } catch (err) {
-    console.error('[history remove]', err.message);
+    console.error('[history remove error]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// ─── PROXY: forward m3u8 streams & video segments via spawn streaming ────────
+// ─── PROXY: HLS Streams & Segment Streaming with Process Safety ────────────
 
 app.get('/proxy/stream', async (req, res) => {
   const { url } = req.query;
@@ -195,46 +244,118 @@ app.get('/proxy/stream', async (req, res) => {
   try {
     const decodedUrl = decodeURIComponent(url);
 
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Cache-Control', 'no-store');
+    // SSRF Basic Validation: Must be http or https
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(decodedUrl);
+    } catch (_) {
+      return res.status(400).send('Invalid stream URL');
+    }
 
-    const urlPath = decodedUrl.split('?')[0];
-    const isPlaylist = urlPath.includes('.m3u8');
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      return res.status(400).send('Invalid protocol');
+    }
+
+    // Disallow loopback / local IP ranges
+    const hostname = parsedUrl.hostname.toLowerCase();
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0' ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      hostname.startsWith('172.16.')
+    ) {
+      return res.status(403).send('Forbidden stream host');
+    }
+
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Headers', '*');
+    res.set('Cache-Control', 'public, max-age=3600');
+
+    const urlPath = parsedUrl.pathname.toLowerCase();
+    const isPlaylist = urlPath.endsWith('.m3u8') || decodedUrl.includes('.m3u8');
 
     if (!isPlaylist) {
-      // Binary video segment (.ts / .xls / .aac) — STREAM DIRECTLY via spawn
-      res.set('Content-Type', 'video/mp2t');
-      const child = spawn('curl', ['-sL', '--compressed', '-A', AGENT, '--max-time', '45', decodedUrl]);
+      // Binary video segment (.ts / .aac / .mp4 / .m4s) -> Stream directly with child process safety
+      res.set('Content-Type', urlPath.endsWith('.aac') ? 'audio/aac' : 'video/mp2t');
+
+      const curlArgs = [
+        '-sL',
+        '--compressed',
+        '-A', AGENT,
+        '--ciphers', CIPHERS,
+        '--tls13-ciphers', TLS13_CIPHERS,
+        '--max-time', '45',
+        decodedUrl
+      ];
+
+      const child = spawn('curl', curlArgs);
+
+      // Clean up child process if client aborts/seeks video
+      let cleanedUp = false;
+      const killChild = () => {
+        if (!cleanedUp && !child.killed) {
+          cleanedUp = true;
+          try { child.kill('SIGTERM'); } catch (_) {}
+        }
+      };
+
+      req.on('close', killChild);
+      req.on('end', killChild);
+      res.on('finish', killChild);
+      res.on('close', killChild);
+
       child.stdout.pipe(res);
-      child.on('error', err => console.error('[proxy stream pipe err]', err.message));
+      child.on('error', err => {
+        killChild();
+        if (!res.headersSent) res.status(500).send(err.message);
+      });
       return;
     }
 
-    const text = await curlFetch(decodedUrl);
+    // Playlist file (.m3u8) -> Read, rewrite URIs to route through proxy
+    const text = await curlFetch(decodedUrl, 20);
     res.set('Content-Type', 'application/vnd.apple.mpegurl');
+    res.set('Cache-Control', 'no-store');
+
     const base = decodedUrl.replace(/\/[^/?#]+([?#].*)?$/, '/');
+
+    // Rewrite lines (variant playlists, segments, keys, init segments)
     const rewritten = text.replace(/^(?!#)([^\r\n]+)/gm, (line) => {
       const trimmed = line.trim();
       if (!trimmed) return line;
-      const segUrl = trimmed.startsWith('http') ? trimmed : base + trimmed;
+      const segUrl = trimmed.startsWith('http://') || trimmed.startsWith('https://')
+        ? trimmed
+        : (trimmed.startsWith('/') ? `${parsedUrl.origin}${trimmed}` : `${base}${trimmed}`);
       return `/proxy/stream?url=${encodeURIComponent(segUrl)}`;
+    }).replace(/URI="([^"]+)"/g, (match, p1) => {
+      const targetUri = p1.startsWith('http://') || p1.startsWith('https://')
+        ? p1
+        : (p1.startsWith('/') ? `${parsedUrl.origin}${p1}` : `${base}${p1}`);
+      return `URI="/proxy/stream?url=${encodeURIComponent(targetUri)}"`;
     });
+
     return res.send(rewritten);
 
   } catch (err) {
-    console.error('[proxy]', err.message);
-    res.status(500).send(err.message);
+    console.error('[proxy stream error]', err.message);
+    if (!res.headersSent) res.status(500).send(err.message);
   }
 });
 
-// ─── CATCH-ALL: serve the SPA ────────────────────────────────────────────────
+// ─── CATCH-ALL: Serve SPA ──────────────────────────────────────────────────
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-// ─── START ───────────────────────────────────────────────────────────────────
+// ─── START SERVER ──────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
-  console.log(`\n  🎌 AniStream running at http://localhost:${PORT}\n`);
+const server = app.listen(PORT, () => {
+  console.log(`\n  🎌 AniStream 2.0 running at http://localhost:${PORT}\n`);
+});
+
+server.on('error', err => {
+  console.error('[server startup error]', err.message);
 });
