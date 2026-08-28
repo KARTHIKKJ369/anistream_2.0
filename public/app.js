@@ -619,43 +619,113 @@ const App = (() => {
     });
   }
 
-  function filterEpisodes(query) {
-    const q = query.trim().toLowerCase();
-    if (!q) {
-      state.filteredEpisodes = state.currentEpisodes;
-    } else {
-      state.filteredEpisodes = state.currentEpisodes.filter(e => String(e.episodeNumber).includes(q));
+  function toggleEpisodeSort() {
+    state.isEpisodeAscending = !state.isEpisodeAscending;
+    renderEpisodeList();
+  }
+
+  function jumpToLatestEpisode() {
+    const allEps = state.currentEpisodes || [];
+    if (!allEps.length) return;
+    const chunkSize = 100;
+    state.activeRangeIndex = Math.floor((allEps.length - 1) / chunkSize);
+    state.episodeSearchQuery = '';
+    const input = $('episode-filter');
+    if (input) input.value = '';
+    renderEpisodeList();
+
+    const list = $('episode-list');
+    if (list) {
+      setTimeout(() => {
+        list.scrollTop = list.scrollHeight;
+      }, 50);
     }
+  }
+
+  function filterEpisodes(query) {
+    state.episodeSearchQuery = (query || '').trim().toLowerCase();
     renderEpisodeList();
   }
 
   function renderEpisodeList() {
     const list = $('episode-list');
     const count = $('episodes-count');
-    const eps = state.filteredEpisodes;
+    const tabsContainer = $('episode-range-tabs');
+    const allEps = state.currentEpisodes || [];
 
-    if (!eps || !eps.length) {
-      list.innerHTML = `<p style="color:var(--color-text-muted); padding:10px;">No episodes found.</p>`;
+    if (!allEps.length) {
+      if (list) list.innerHTML = `<p style="color:var(--color-text-muted); padding:10px;">No episodes found.</p>`;
       if (count) count.textContent = '0 Episodes';
+      if (tabsContainer) tabsContainer.classList.add('hidden');
       return;
     }
 
-    if (count) count.textContent = `${state.currentEpisodes.length} Episode${state.currentEpisodes.length !== 1 ? 's' : ''}`;
+    if (count) count.textContent = `${allEps.length} Episode${allEps.length !== 1 ? 's' : ''}`;
+
+    const sortText = $('sort-order-text');
+    if (sortText) {
+      sortText.textContent = state.isEpisodeAscending ? `1 ➔ ${allEps.length}` : `${allEps.length} ➔ 1`;
+    }
+
+    const chunkSize = 100;
+    const totalChunks = Math.ceil(allEps.length / chunkSize);
+
+    let displayList = [];
+    if (state.episodeSearchQuery) {
+      if (tabsContainer) tabsContainer.classList.add('hidden');
+      displayList = allEps.filter(e => String(e.episodeNumber).includes(state.episodeSearchQuery));
+    } else if (allEps.length > 60) {
+      if (tabsContainer) {
+        tabsContainer.classList.remove('hidden');
+        tabsContainer.innerHTML = '';
+
+        for (let i = 0; i < totalChunks; i++) {
+          const startNum = i * chunkSize + 1;
+          const endNum = Math.min(allEps.length, (i + 1) * chunkSize);
+          const tab = document.createElement('button');
+          tab.className = `ep-range-tab ${i === state.activeRangeIndex ? 'active' : ''}`;
+          tab.textContent = `${startNum} - ${endNum}`;
+          tab.onclick = () => {
+            state.activeRangeIndex = i;
+            renderEpisodeList();
+          };
+          tabsContainer.appendChild(tab);
+        }
+      }
+
+      const startIdx = state.activeRangeIndex * chunkSize;
+      const endIdx = Math.min(allEps.length, (state.activeRangeIndex + 1) * chunkSize);
+      displayList = allEps.slice(startIdx, endIdx);
+    } else {
+      if (tabsContainer) tabsContainer.classList.add('hidden');
+      displayList = allEps.slice();
+    }
+
+    if (!state.isEpisodeAscending) {
+      displayList = displayList.slice().reverse();
+    }
 
     const histEntry = state.historyData.find(h => h.animeId === state.currentAnimeId);
     const lastWatched = histEntry ? parseInt(histEntry.episodeNumber, 10) : null;
 
-    list.innerHTML = '';
-    eps.forEach((ep) => {
-      const actualIdx = state.currentEpisodes.findIndex(e => e.episodeId === ep.episodeId);
-      const btn = document.createElement('button');
-      btn.className = 'ep-btn';
-      if (lastWatched !== null && ep.episodeNumber < lastWatched) btn.classList.add('watched');
-      if (lastWatched !== null && ep.episodeNumber === lastWatched) btn.classList.add('current');
-      btn.textContent = `Ep ${ep.episodeNumber}`;
-      btn.onclick = () => playEpisode(actualIdx >= 0 ? actualIdx : 0);
-      list.appendChild(btn);
-    });
+    if (list) {
+      list.innerHTML = '';
+      if (!displayList.length) {
+        list.innerHTML = `<p style="color:var(--color-text-muted); padding:10px;">No episodes match "${escHtml(state.episodeSearchQuery)}".</p>`;
+        return;
+      }
+
+      displayList.forEach((ep) => {
+        const actualIdx = allEps.findIndex(e => e.episodeId === ep.episodeId);
+        const btn = document.createElement('button');
+        btn.className = 'ep-btn';
+        if (lastWatched !== null && ep.episodeNumber < lastWatched) btn.classList.add('watched');
+        if (lastWatched !== null && ep.episodeNumber === lastWatched) btn.classList.add('current');
+        btn.textContent = `Ep ${ep.episodeNumber}`;
+        btn.onclick = () => playEpisode(actualIdx >= 0 ? actualIdx : 0);
+        list.appendChild(btn);
+      });
+    }
   }
 
   function setLang(lang) {
@@ -1325,6 +1395,8 @@ const App = (() => {
     setVolume,
     seekRelative,
     filterEpisodes,
+    toggleEpisodeSort,
+    jumpToLatestEpisode,
     showShortcutsModal,
     hideShortcutsModal,
   };

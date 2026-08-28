@@ -107,6 +107,7 @@ async function queryAniList(searchTerm) {
       coverImage { extraLarge large medium }
       description(asHtml: false)
       episodes
+      nextAiringEpisode { episode }
       genres
       averageScore
       studios(isMain: true) { nodes { name } }
@@ -158,6 +159,7 @@ async function queryAniList(searchTerm) {
     const bannerImg = d.bannerImage || (d.coverImage && (d.coverImage.extraLarge || d.coverImage.large)) || null;
     const coverImg = (d.coverImage && (d.coverImage.extraLarge || d.coverImage.large || d.coverImage.medium)) || null;
     const studioName = (d.studios && d.studios.nodes && d.studios.nodes[0] && d.studios.nodes[0].name) || 'Animation Studio';
+    const totalEps = d.episodes || (d.nextAiringEpisode && d.nextAiringEpisode.episode ? d.nextAiringEpisode.episode - 1 : null) || null;
 
     const charList = (d.characters && d.characters.edges) ? d.characters.edges.map(e => {
       const node = e.node || {};
@@ -190,7 +192,7 @@ async function queryAniList(searchTerm) {
       bannerImage: bannerImg,
       coverImage: coverImg,
       description: d.description ? d.description.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim() : '',
-      episodesCount: d.episodes || null,
+      episodesCount: totalEps,
       genres: d.genres || ['Action', 'Fantasy'],
       score: d.averageScore ? (d.averageScore / 10).toFixed(1) : '8.3',
       studio: studioName,
@@ -580,13 +582,41 @@ async function getStreamLinks(episodeId, lang = 'sub') {
   return unique.length > 0 ? unique : [{ quality: 'best', url: masterM3u8 }];
 }
 
+const POPULAR_SLUG_MAP = {
+  'one-piece': 'one-piece-3880',
+  '1p': 'one-piece-3880',
+  'solo-leveling': 'solo-leveling-4883',
+  'solo-leveling-season-2': 'solo-leveling-season-2-arise-from-the-shadow-4884',
+  'attack-on-titan': 'shingeki-no-kyojin-4739',
+  'shingeki-no-kyojin': 'shingeki-no-kyojin-4739',
+  'jujutsu-kaisen': 'jujutsu-kaisen-2552',
+  'chainsaw-man': 'chainsaw-man-922',
+  'demon-slayer': 'kimetsu-no-yaiba-1217',
+  'kimetsu-no-yaiba': 'kimetsu-no-yaiba-1217',
+  'naruto': 'naruto-3610',
+  'naruto-shippuden': 'naruto-shippuuden-3613',
+  'bleach': 'bleach-689',
+  'dragon-ball-z': 'dragon-ball-z-1419',
+  'dragon-ball-super': 'dragon-ball-super-1418',
+  'my-hero-academia': 'boku-no-hero-academia-747',
+  'boku-no-hero-academia': 'boku-no-hero-academia-747',
+  'hunter-x-hunter': 'hunter-x-hunter-2011-2184',
+  'black-clover': 'black-clover-667',
+  'detective-conan': 'detective-conan-1250',
+};
+
 /**
  * Resolve any query or title slug to a valid anidb ID ending in -<number>.
  */
 async function resolveAnidbId(queryOrId) {
   if (!queryOrId) return queryOrId;
-  const trimmed = queryOrId.trim();
+  const trimmed = queryOrId.trim().toLowerCase();
   if (/-\d+$/.test(trimmed)) return trimmed;
+
+  const normalized = trimmed.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  if (POPULAR_SLUG_MAP[normalized]) {
+    return POPULAR_SLUG_MAP[normalized];
+  }
 
   const clean = trimmed.replace(/-/g, ' ').trim();
   const scrapeResults = await searchAnimeScrape(clean);

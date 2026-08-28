@@ -261,12 +261,24 @@
       <!-- Episodes Grid -->
       <div class="episodes-section">
         <div class="episodes-header">
-          <h3 class="box-heading" style="margin:0;">Episodes</h3>
-          <div style="display:flex; align-items:center; gap:12px;">
-            <input type="text" class="episode-filter-input" id="episode-filter" placeholder="Filter episode #" oninput="App.filterEpisodes(this.value)" />
+          <div class="episodes-header-left">
+            <h3 class="box-heading" style="margin:0;">Episodes</h3>
             <span class="episodes-badge" id="episodes-count">0 Episodes</span>
           </div>
+          <div class="episodes-header-controls">
+            <button class="btn-sort-order" id="btn-sort-order" onclick="App.toggleEpisodeSort()" title="Toggle Ascending / Descending">
+              <span id="sort-order-text">1 ➔ End</span>
+            </button>
+            <button class="btn-jump-latest" id="btn-jump-latest" onclick="App.jumpToLatestEpisode()" title="Jump to the latest released episode">
+              Latest Ep
+            </button>
+            <input type="text" class="episode-filter-input" id="episode-filter" placeholder="Jump to ep #..." oninput="App.filterEpisodes(this.value)" />
+          </div>
         </div>
+
+        <!-- Range Tabs for 50+ episodes (1-100, 101-200, etc.) -->
+        <div class="episode-range-tabs hidden" id="episode-range-tabs"></div>
+
         <div class="episodes-grid" id="episode-list"></div>
       </div>
 
