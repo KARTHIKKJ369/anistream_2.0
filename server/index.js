@@ -2,6 +2,21 @@
 
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
+
+// Auto-load .env file if present
+const envPath = path.join(__dirname, '../.env');
+if (fs.existsSync(envPath)) {
+  try {
+    fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+      if (match && !process.env[match[1]]) {
+        process.env[match[1]] = match[2] ? match[2].trim().replace(/^['"]|['"]$/g, '') : '';
+      }
+    });
+  } catch (_) {}
+}
+
 const { execFile, spawn } = require('child_process');
 const {
   AGENT,

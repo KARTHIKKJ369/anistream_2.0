@@ -30,11 +30,25 @@ function findCurl() {
 
 const path = require('path');
 
+const CF_WORKER_URL = process.env.CF_WORKER_URL ? process.env.CF_WORKER_URL.replace(/\/+$/, '') : null;
+
 /**
  * Executes Python curl_cffi (Chrome 124 impersonation) for instant Cloudflare bypass,
- * with fallback to curl with custom TLS ciphers.
+ * with fallback to Cloudflare Worker proxy or curl with custom TLS ciphers.
  */
 function anidbFetch(url, timeoutSec = 15) {
+  // If a Cloudflare Worker proxy is configured, use it directly
+  if (CF_WORKER_URL) {
+    const proxyUrl = `${CF_WORKER_URL}/proxy${url.replace(/^https?:\/\/[^\/]+/, '')}`;
+    return fetch(proxyUrl, {
+      headers: { 'User-Agent': AGENT },
+      timeout: timeoutSec * 1000
+    }).then(res => {
+      if (res.ok) return res.text();
+      throw new Error(`Worker responded with ${res.status}`);
+    });
+  }
+
   const pyScript = path.join(__dirname, 'cf_fetch.py');
 
   return new Promise((resolve, reject) => {
@@ -541,6 +555,24 @@ async function getStreamLinks(episodeId, lang = 'sub', animeId = null, epNumber 
 
   const langCode = lang === 'dub' ? 'eng' : 'jpn';
   let embedUrl = null;
+
+  // 1. If Cloudflare Worker is configured, query its dedicated stream extractor
+  if (CF_WORKER_URL && /^\d+$/.test(String(realEpId))) {
+    try {
+      const res = await fetch(`${CF_WORKER_URL}/stream/${encodeURIComponent(realEpId)}?lang=${encodeURIComponent(lang)}`, {
+        headers: { 'User-Agent': AGENT },
+        timeout: 12000
+      });
+      if (res.ok) {
+        const streamData = await res.json();
+        if (streamData && streamData.links && streamData.links.length > 0) {
+          return streamData;
+        }
+      }
+    } catch (cfErr) {
+      console.warn('[CF Worker stream fetch notice]:', cfErr.message);
+    }
+  }
 
   try {
     const url = `${BASE_API}/api/frontend/episode/${realEpId}/languages`;

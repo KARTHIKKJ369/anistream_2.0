@@ -9,9 +9,19 @@ PORT=${PORT:-7474}
 PID_FILE="$SCRIPT_DIR/.server.pid"
 LOG_FILE="$SCRIPT_DIR/server.log"
 
+# Auto-load .env if present
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  set -a
+  source "$SCRIPT_DIR/.env" 2>/dev/null || true
+  set +a
+fi
+
 echo ""
 echo "  🎌 AniStream 2.0 — Otaku Cinema Anime Streaming"
 echo "  Powered by ani-cli & AniList"
+if [ -n "$CF_WORKER_URL" ]; then
+  echo "  ⚡ Edge Proxy: $CF_WORKER_URL"
+fi
 echo ""
 
 # Check for node
