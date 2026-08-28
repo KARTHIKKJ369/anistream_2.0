@@ -56,7 +56,39 @@ function getWorkerUrl() {
  */
 function anidbFetch(url, timeoutSec = 15) {
   const workerUrl = getWorkerUrl();
-  // If a Cloudflare Worker proxy is configured, use it directly
+
+  const fetchLocal = () => {
+    const pyScript = path.join(__dirname, 'cf_fetch.py');
+    return new Promise((resolve, reject) => {
+      // 1. Try Python curl_cffi directly (bypasses Cloudflare on datacenter IPs)
+      execFile('python3', [pyScript, url, String(timeoutSec)], { maxBuffer: 25 * 1024 * 1024 }, (pyErr, pyStdout) => {
+        if (!pyErr && pyStdout && !pyStdout.includes('Just a moment')) {
+          return resolve(pyStdout);
+        }
+
+        // 2. Fallback to TLS-ciphers curl if python3 is unavailable
+        findCurl().then(curlExe => {
+          const args = [
+            '-sL',
+            '-A', AGENT,
+            '--ciphers', CIPHERS,
+            '--tls13-ciphers', TLS13_CIPHERS,
+            '--max-time', String(timeoutSec),
+            url
+          ];
+
+          execFile(curlExe, args, { maxBuffer: 25 * 1024 * 1024 }, (err, stdout) => {
+            if (!err && stdout && !/just a moment/i.test(stdout)) {
+              return resolve(stdout);
+            }
+            reject(new Error('Blocked by Cloudflare challenge.'));
+          });
+        }).catch(reject);
+      });
+    });
+  };
+
+  // If a Cloudflare Worker proxy is configured, try it first with auto-fallback to local
   if (workerUrl) {
     const proxyUrl = `${workerUrl}/proxy${url.replace(/^https?:\/\/[^\/]+/, '')}`;
     return fetch(proxyUrl, {
@@ -64,39 +96,11 @@ function anidbFetch(url, timeoutSec = 15) {
       timeout: timeoutSec * 1000
     }).then(res => {
       if (res.ok) return res.text();
-      throw new Error(`Worker responded with ${res.status}`);
-    });
+      return fetchLocal();
+    }).catch(() => fetchLocal());
   }
 
-  const pyScript = path.join(__dirname, 'cf_fetch.py');
-
-  return new Promise((resolve, reject) => {
-    // 1. Try Python curl_cffi directly (bypasses Cloudflare on datacenter IPs)
-    execFile('python3', [pyScript, url, String(timeoutSec)], { maxBuffer: 25 * 1024 * 1024 }, (pyErr, pyStdout) => {
-      if (!pyErr && pyStdout && !pyStdout.includes('Just a moment')) {
-        return resolve(pyStdout);
-      }
-
-      // 2. Fallback to TLS-ciphers curl if python3 is unavailable
-      findCurl().then(curlExe => {
-        const args = [
-          '-sL',
-          '-A', AGENT,
-          '--ciphers', CIPHERS,
-          '--tls13-ciphers', TLS13_CIPHERS,
-          '--max-time', String(timeoutSec),
-          url
-        ];
-
-        execFile(curlExe, args, { maxBuffer: 25 * 1024 * 1024 }, (err, stdout) => {
-          if (!err && stdout && !/just a moment/i.test(stdout)) {
-            return resolve(stdout);
-          }
-          reject(new Error('Blocked by Cloudflare challenge.'));
-        });
-      }).catch(reject);
-    });
-  });
+  return fetchLocal();
 }
 
 // ─── ANILIST METADATA & BOUNDED LRU CACHE ──────────────────────────────
@@ -552,18 +556,21 @@ async function generateFallbackEpisodes(resolvedId) {
 async function getStreamLinks(episodeId, lang = 'sub', animeId = null, epNumber = null) {
   let realEpId = episodeId;
 
-  // Auto-resolve non-numeric/synthetic episode IDs (e.g. one-piece-ep-1)
-  if (!/^\d+$/.test(String(episodeId))) {
+  // Auto-resolve non-numeric/synthetic episode IDs or small integer episode indices
+  const isSmallInt = /^\d+$/.test(String(episodeId)) && parseInt(episodeId, 10) < 5000 && animeId;
+  const isSynthetic = !/^\d+$/.test(String(episodeId)) || isSmallInt;
+
+  if (isSynthetic || (animeId && epNumber)) {
     const match = String(episodeId).match(/^(.*?)-ep-(\d+)$/);
     const targetAnime = animeId || (match ? match[1] : null);
-    const targetEp = (epNumber !== null && epNumber !== undefined) ? parseInt(epNumber, 10) : (match ? parseInt(match[2], 10) : 1);
+    const targetEp = (epNumber !== null && epNumber !== undefined) ? parseInt(epNumber, 10) : (match ? parseInt(match[2], 10) : (isSmallInt ? parseInt(episodeId, 10) : 1));
 
     if (targetAnime) {
       try {
         const resolvedAnime = await resolveAnidbId(targetAnime);
         const eps = await getEpisodes(resolvedAnime);
         const found = eps.find(e => e.episodeNumber === targetEp);
-        if (found && /^\d+$/.test(found.episodeId)) {
+        if (found && found.episodeId && found.episodeId !== episodeId) {
           realEpId = found.episodeId;
         }
       } catch (err) {
@@ -723,6 +730,165 @@ async function resolveAnidbId(queryOrId) {
   return queryOrId;
 }
 
+/**
+ * Fetches real-time Spotlight, Trending, Popular, and Top Rated anime directly from AniList with Kitsu fallback.
+ */
+async function getLiveFeaturedAnime() {
+  const anilistQuery = `
+  query {
+    spotlight: Page(page: 1, perPage: 6) {
+      media(type: ANIME, sort: TRENDING_DESC, isAdult: false) {
+        id
+        title { english romaji userPreferred }
+        coverImage { extraLarge large medium }
+        bannerImage
+        description(asHtml: false)
+        episodes
+        genres
+        averageScore
+        seasonYear
+        format
+        studios(isMain: true) { nodes { name } }
+      }
+    }
+    trending: Page(page: 1, perPage: 12) {
+      media(type: ANIME, sort: TRENDING_DESC, isAdult: false) {
+        id
+        title { english romaji userPreferred }
+        coverImage { extraLarge large medium }
+        bannerImage
+        genres
+        averageScore
+        seasonYear
+        format
+      }
+    }
+    popular: Page(page: 1, perPage: 12) {
+      media(type: ANIME, sort: POPULARITY_DESC, isAdult: false) {
+        id
+        title { english romaji userPreferred }
+        coverImage { extraLarge large medium }
+        bannerImage
+        genres
+        averageScore
+        seasonYear
+        format
+      }
+    }
+    topRated: Page(page: 1, perPage: 12) {
+      media(type: ANIME, sort: SCORE_DESC, isAdult: false) {
+        id
+        title { english romaji userPreferred }
+        coverImage { extraLarge large medium }
+        bannerImage
+        genres
+        averageScore
+        seasonYear
+        format
+      }
+    }
+  }
+  `;
+
+  // 1. Primary: AniList GraphQL
+  try {
+    const res = await fetch('https://graphql.anilist.co', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'AniStream-App/2.0 (https://github.com/KARTHIKKJ369/anistream_2.0)',
+        'Referer': 'https://anilist.co/',
+        'Origin': 'https://anilist.co'
+      },
+      body: JSON.stringify({ query: anilistQuery }),
+      timeout: 8000
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const d = data && data.data;
+      if (d) {
+        const mapMedia = m => {
+          const title = (m.title && (m.title.english || m.title.romaji || m.title.userPreferred)) || 'Anime';
+          const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+          const cover = (m.coverImage && (m.coverImage.extraLarge || m.coverImage.large || m.coverImage.medium)) || null;
+          const banner = m.bannerImage || cover || null;
+          const studio = (m.studios && m.studios.nodes && m.studios.nodes[0] && m.studios.nodes[0].name) || 'Animation Studio';
+          return {
+            id: slug,
+            anilistId: m.id,
+            title,
+            cover,
+            banner,
+            score: m.averageScore ? (m.averageScore / 10).toFixed(1) : '8.5',
+            year: m.seasonYear || 2025,
+            format: m.format || 'TV',
+            description: m.description ? m.description.replace(/<[^>]+>/g, '').trim() : '',
+            genres: m.genres || ['Action', 'Fantasy'],
+            studio,
+            episodes: m.episodes || 12,
+            duration: '24m'
+          };
+        };
+
+        return {
+          spotlight: (d.spotlight && d.spotlight.media || []).map(mapMedia),
+          trending: (d.trending && d.trending.media || []).map(mapMedia),
+          popular: (d.popular && d.popular.media || []).map(mapMedia),
+          topRated: (d.topRated && d.topRated.media || []).map(mapMedia),
+        };
+      }
+    }
+  } catch (err) {
+    console.error('[AniList local error]', err.message);
+  }
+
+  // 2. Fallback: Kitsu Open API
+  try {
+    const kitsuRes = await fetch('https://kitsu.io/api/edge/trending/anime?limit=12', {
+      headers: { 'Accept': 'application/vnd.api+json', 'User-Agent': 'AniStream/2.0' },
+      timeout: 8000
+    });
+    if (kitsuRes.ok) {
+      const data = await kitsuRes.json();
+      const list = (data && data.data || []).map(item => {
+        const attr = item.attributes || {};
+        const title = attr.canonicalTitle || 'Anime';
+        const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        const poster = (attr.posterImage && (attr.posterImage.large || attr.posterImage.medium)) || null;
+        const banner = (attr.coverImage && (attr.coverImage.large || attr.coverImage.original)) || poster;
+        return {
+          id: slug,
+          title,
+          cover: poster,
+          banner,
+          score: attr.averageRating ? (parseFloat(attr.averageRating) / 10).toFixed(1) : '8.4',
+          year: attr.startDate ? parseInt(attr.startDate.slice(0, 4), 10) : 2024,
+          format: attr.subtype ? attr.subtype.toUpperCase() : 'TV',
+          description: attr.synopsis || '',
+          genres: ['Action', 'Fantasy'],
+          studio: 'Animation Studio',
+          episodes: attr.episodeCount || 12,
+          duration: '24m'
+        };
+      });
+
+      if (list.length > 0) {
+        return {
+          spotlight: list.slice(0, 5),
+          trending: list,
+          popular: list,
+          topRated: list,
+        };
+      }
+    }
+  } catch (kitsuErr) {
+    console.error('[Kitsu local error]', kitsuErr.message);
+  }
+
+  return null;
+}
+
 module.exports = {
   AGENT,
   CIPHERS,
@@ -735,4 +901,5 @@ module.exports = {
   getStreamLinks,
   smartFetchMetadata,
   resolveAnidbId,
+  getLiveFeaturedAnime,
 };

@@ -1,114 +1,124 @@
-# 🎌 AniStream 2.0 — Otaku Cinema Anime Streaming
+# AniStream 2.0 — Otaku Cinema Anime Streaming
 
-> An abyssal obsidian-black interface built on raw dark charcoal surfaces, high-contrast display typography, vermilion-crimson accents, and high-performance video streaming powered by **ani-cli** and **AniList**.
+An obsidian-black anime streaming platform built on glassmorphic dark charcoal surfaces, modern display typography, vermilion-crimson accents, and high-performance video streaming powered by ani-cli and AniList GraphQL.
 
 ---
 
-## ✨ Features
+## Key Features
 
-- 🎬 **Otaku Cinema Video Player**:
+- **Otaku Cinema Video Player**:
   - Native HLS.js adaptive bitrate player (1080p, 720p, 480p, 360p).
-  - In-player **SUB / DUB** track switching without losing current playback position.
+  - In-player SUB / DUB audio track switcher without losing playback position.
   - Interactive pointer drag scrubber with live hover time preview and buffer indicators.
-  - **Auto-Play Next Episode**: Cancelable 5-second countdown overlay on episode completion.
-  - **Exact Resume**: Remembers exact seconds watched so you pick up right where you left off.
-- ⚡ **Ultra-Fast Hybrid Search**:
-  - Debounced instant autocomplete dropdown (<200ms) with arrow key navigation.
-  - Rich anime metadata powered by AniList GraphQL: HD cover art, banners, synopsis, ratings, studio, air date, and cast avatars.
-- 🔄 **`ani-cli` Bidirectional History Sync**:
-  - Seamlessly syncs with your native terminal `ani-cli` history file (`~/.local/state/ani-cli/ani-hsts`).
-  - Intelligent title sanitization that cleans episode tags and resolves CLI shorthand (`1P` ➔ *One Piece*, `AOT` ➔ *Attack on Titan*, `SL` ➔ *Solo Leveling*).
-- ⌨️ **Full Keyboard Shortcuts**:
-  - Complete keyboard navigation matching modern cinema players (`Space`, `F`, `M`, `←`/`→`, `↑`/`↓`, `N`/`P`, `0`-`9`, `?`).
-- 🛡️ **Safe Stream Proxy**:
-  - Edge-to-edge HLS stream proxy with client lifecycle management (kills orphaned `curl` processes on seek/close).
-  - SSRF protection against private IP access.
-- 🚀 **Background Daemon Support**:
-  - Run `./start.sh` and safely close your terminal window — AniStream stays alive in the background.
+  - **Auto-Play Next Episode**: Cancelable countdown overlay upon episode completion.
+  - **Exact Resume**: Stores playback timestamp in seconds to resume where you left off.
+  - **1000+ Episode Support**: Tabbed range selector (1-100, 101-200, ..., 1101+), latest episode jump, and reverse order toggle.
+
+- **Live Dynamic Homepage & Spotlight Carousel**:
+  - Auto-cycling **Spotlight Hero Billboard** with high-resolution banner artwork, studio metadata, community scores, and quick watch buttons.
+  - **Live Multi-Row Showcase**: Real-time Trending Now, Popular Anime, and Top Rated Masterpieces.
+  - **Interactive Genre Filter**: Filter galleries dynamically across 10+ genres (Action, Fantasy, Sci-Fi, Romance, etc.).
+  - **16:9 Landscape Continue Watching**: Visual thumbnail cards with progress bars and 1-tap delete.
+
+- **Mobile-First Experience**:
+  - Pinned glassmorphic Mobile Bottom Navigation Bar (Cinema, Search, Library, Shortcuts).
+  - Auto-responsive 2-to-3 column poster grid with touch-friendly tap targets.
+  - Full touch scrubber and gesture-friendly playback controls.
+
+- **Ultra-Fast Hybrid Search**:
+  - Debounced autocomplete dropdown (<200ms) with keyboard arrow selection.
+  - Rich anime metadata powered by AniList GraphQL + Kitsu fallback.
+
+- **Full Keyboard Shortcuts**:
+  - Complete hotkeys matching professional media players (`Space`, `F`, `M`, `Left`/`Right`, `Up`/`Down`, `N`/`P`, `0`-`9`, `?`).
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## Keyboard Shortcuts
 
 | Shortcut | Action |
 |---|---|
-| <kbd>Space</kbd> / <kbd>K</kbd> | Toggle Play / Pause |
-| <kbd>F</kbd> | Toggle Fullscreen |
-| <kbd>M</kbd> | Toggle Mute |
-| <kbd>←</kbd> / <kbd>J</kbd> | Seek Backward 10 seconds |
-| <kbd>→</kbd> / <kbd>L</kbd> | Seek Forward 10 seconds |
-| <kbd>↑</kbd> / <kbd>↓</kbd> | Volume Up / Down (10% steps) |
-| <kbd>N</kbd> | Next Episode |
-| <kbd>P</kbd> | Previous Episode |
-| <kbd>0</kbd> – <kbd>9</kbd> | Jump to 0% – 90% of duration |
-| <kbd>?</kbd> | Open Shortcuts Cheatsheet Modal |
-| <kbd>Esc</kbd> | Exit Fullscreen / Close Player / Modals |
+| Space / K | Toggle Play / Pause |
+| F | Toggle Fullscreen |
+| M | Toggle Mute |
+| Left / J | Seek Backward 10 seconds |
+| Right / L | Seek Forward 10 seconds |
+| Up / Down | Volume Up / Down (10% steps) |
+| N | Next Episode |
+| P | Previous Episode |
+| 0 – 9 | Jump to 0% – 90% of duration |
+| ? | Open Shortcuts Modal |
+| Esc | Exit Fullscreen / Close Player / Modals |
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### 📋 Prerequisites & Installation (Linux / Ubuntu / macOS)
-
-If running on a fresh Linux / Ubuntu VM (e.g. Azure / AWS / DigitalOcean):
+### Option 1: Standard Development Mode (Interactive)
 
 ```bash
-# 1. Install Node.js (v20+ recommended)
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
+# Clone repository
+git clone https://github.com/KARTHIKKJ369/anistream_2.0.git
+cd anistream_2.0
 
-# 2. Install dependencies
+# Install dependencies
 npm install
+
+# Run with live logs & auto-reload
+npm run dev
 ```
 
-### 1. Launch in Background (Daemon Mode)
+- Opens on **http://localhost:7474**
+- Watch mode automatically reloads when files change (`node --watch`).
+- Stop anytime with `Ctrl + C`.
+
+---
+
+### Option 2: Background Daemon Mode (Detached)
 
 ```bash
+# Start server in the background
 ./start.sh
 ```
 
-- Server starts in the background on **http://localhost:7474**
-- You can **safely close your terminal** window after starting!
-- View live logs anytime with: `tail -f server.log`
-
-### 2. Stop Server
-
-```bash
-./stop.sh
-```
+- Runs detached in the background so you can close your terminal window.
+- View live logs: `tail -f server.log`
+- Stop anytime: `./stop.sh`
 
 ---
 
-## 🏗️ Project Architecture
+## Project Structure
 
 ```text
 anistream_2.0/
 ├── public/
-│   ├── index.html       # Otaku Cinema SPA Layout & Video Player UI
-│   ├── style.css        # MASTER design system (Obsidian / Crimson / Hairlines)
-│   └── app.js           # Client Engine: Hash Router, HLS Player, Keyboard Hotkeys
+│   ├── index.html          # Otaku Cinema SPA Layout, Billboard Hero & Video Player UI
+│   ├── style.css           # Design system (Obsidian / Crimson / Hairlines / Mobile)
+│   ├── app.js              # Client Engine: Hash Router, HLS Player, Carousel, Shortcuts
+│   ├── logo.svg            # Vector Brand Logo Asset
+│   └── favicon.svg         # High-Res Vector Favicon
 ├── server/
-│   ├── index.js         # Express Server & Safe HLS Stream Proxy
-│   ├── anidb.js         # Hybrid Scraper & AniList GraphQL Metadata Engine
-│   └── history.js       # ani-cli ani-hsts & ani-progress.json Sync Store
-├── start.sh             # Background Daemon Launcher
-├── stop.sh              # Clean Process Stopper
-├── MASTER.md            # Design System Specification
-└── README.md            # Documentation
+│   ├── index.js            # Express Server & Safe HLS Stream Relay
+│   ├── anidb.js            # Multi-tier Scraper & AniList/Kitsu Live Metadata Engine
+│   └── history.js          # ani-cli ani-hsts & ani-progress.json Sync Store
+├── start.sh                # Background Daemon Launcher
+├── stop.sh                 # Clean Process Stopper
+├── .env.example            # Environment Variable Template
+└── README.md               # Documentation
 ```
 
 ---
 
-## 🎨 Design System Tokens
+## Design System Tokens
 
 - **Canvas**: `#0a0a0c` (Abyssal Obsidian)
-- **Surfaces**: `#141419` (Surface 1), `#1c1c24` (Surface 2), `#262632` (Surface 3)
+- **Surfaces**: `#131318` (Surface 1), `#1a1a22` (Surface 2), `#242430` (Surface 3)
 - **Accent**: `#e11d48` (Vermilion Crimson), Hover: `#f43f5e`
-- **Typography**: `Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif` (Tight `-0.025em` tracking)
+- **Typography**: `Outfit` (Display/Headings), `Plus Jakarta Sans` (UI/Body), `JetBrains Mono` (Tech/Hotkeys)
 - **Border**: `rgba(255, 255, 255, 0.08)` (1px Razor Hairline)
 
 ---
 
-## 📜 License
+## License
 
 MIT License • Powered by [ani-cli](https://github.com/pystardust/ani-cli) & [AniList GraphQL](https://anilist.gitbook.io/anilist-apiv2-docs/).

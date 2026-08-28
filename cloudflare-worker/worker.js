@@ -298,6 +298,161 @@ async function getEpisodes(animeId) {
 
 // ─── WORKER FETCH HANDLER ──────────────────────────────────────────────────
 
+async function getLiveFeaturedAnime() {
+  const anilistQuery = `
+  query {
+    spotlight: Page(page: 1, perPage: 6) {
+      media(type: ANIME, sort: TRENDING_DESC, isAdult: false) {
+        id
+        title { english romaji userPreferred }
+        coverImage { extraLarge large medium }
+        bannerImage
+        description(asHtml: false)
+        episodes
+        genres
+        averageScore
+        seasonYear
+        format
+        studios(isMain: true) { nodes { name } }
+      }
+    }
+    trending: Page(page: 1, perPage: 12) {
+      media(type: ANIME, sort: TRENDING_DESC, isAdult: false) {
+        id
+        title { english romaji userPreferred }
+        coverImage { extraLarge large medium }
+        bannerImage
+        genres
+        averageScore
+        seasonYear
+        format
+      }
+    }
+    popular: Page(page: 1, perPage: 12) {
+      media(type: ANIME, sort: POPULARITY_DESC, isAdult: false) {
+        id
+        title { english romaji userPreferred }
+        coverImage { extraLarge large medium }
+        bannerImage
+        genres
+        averageScore
+        seasonYear
+        format
+      }
+    }
+    topRated: Page(page: 1, perPage: 12) {
+      media(type: ANIME, sort: SCORE_DESC, isAdult: false) {
+        id
+        title { english romaji userPreferred }
+        coverImage { extraLarge large medium }
+        bannerImage
+        genres
+        averageScore
+        seasonYear
+        format
+      }
+    }
+  }
+  `;
+
+  // 1. Primary Source: AniList GraphQL with full browser impersonation headers
+  try {
+    const res = await fetch('https://graphql.anilist.co', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'AniStream-App/2.0 (https://github.com/KARTHIKKJ369/anistream_2.0)',
+        'Referer': 'https://anilist.co/',
+        'Origin': 'https://anilist.co'
+      },
+      body: JSON.stringify({ query: anilistQuery })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const d = data && data.data;
+      if (d) {
+        const mapMedia = m => {
+          const title = (m.title && (m.title.english || m.title.romaji || m.title.userPreferred)) || 'Anime';
+          const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+          const cover = (m.coverImage && (m.coverImage.extraLarge || m.coverImage.large || m.coverImage.medium)) || null;
+          const banner = m.bannerImage || cover || null;
+          const studio = (m.studios && m.studios.nodes && m.studios.nodes[0] && m.studios.nodes[0].name) || 'Animation Studio';
+          return {
+            id: slug,
+            anilistId: m.id,
+            title,
+            cover,
+            banner,
+            score: m.averageScore ? (m.averageScore / 10).toFixed(1) : '8.5',
+            year: m.seasonYear || 2025,
+            format: m.format || 'TV',
+            description: m.description ? m.description.replace(/<[^>]+>/g, '').trim() : '',
+            genres: m.genres || ['Action', 'Fantasy'],
+            studio,
+            episodes: m.episodes || 12,
+            duration: '24m'
+          };
+        };
+
+        return {
+          spotlight: (d.spotlight && d.spotlight.media || []).map(mapMedia),
+          trending: (d.trending && d.trending.media || []).map(mapMedia),
+          popular: (d.popular && d.popular.media || []).map(mapMedia),
+          topRated: (d.topRated && d.topRated.media || []).map(mapMedia),
+        };
+      }
+    }
+  } catch (err) {
+    console.error('[AniList worker fetch error]', err.message);
+  }
+
+  // 2. High-Availability Fallback: Kitsu Open Anime API
+  try {
+    const kitsuRes = await fetch('https://kitsu.io/api/edge/trending/anime?limit=12', {
+      headers: { 'Accept': 'application/vnd.api+json', 'User-Agent': 'AniStream/2.0' }
+    });
+    if (kitsuRes.ok) {
+      const data = await kitsuRes.json();
+      const list = (data && data.data || []).map(item => {
+        const attr = item.attributes || {};
+        const title = attr.canonicalTitle || 'Anime';
+        const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        const poster = (attr.posterImage && (attr.posterImage.large || attr.posterImage.medium)) || null;
+        const banner = (attr.coverImage && (attr.coverImage.large || attr.coverImage.original)) || poster;
+        return {
+          id: slug,
+          title,
+          cover: poster,
+          banner,
+          score: attr.averageRating ? (parseFloat(attr.averageRating) / 10).toFixed(1) : '8.4',
+          year: attr.startDate ? parseInt(attr.startDate.slice(0, 4), 10) : 2024,
+          format: attr.subtype ? attr.subtype.toUpperCase() : 'TV',
+          description: attr.synopsis || '',
+          genres: ['Action', 'Fantasy'],
+          studio: 'Animation Studio',
+          episodes: attr.episodeCount || 12,
+          duration: '24m'
+        };
+      });
+
+      if (list.length > 0) {
+        return {
+          spotlight: list.slice(0, 5),
+          trending: list,
+          popular: list,
+          topRated: list,
+        };
+      }
+    }
+  } catch (kitsuErr) {
+    console.error('[Kitsu worker error]', kitsuErr.message);
+  }
+
+  return null;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -321,25 +476,19 @@ export default {
     // ── API: /api/featured ──────────────────────────────────────────────────
     if (url.pathname === '/api/featured') {
       try {
-        const list = await Promise.all(FEATURED_ITEMS.map(async item => {
-          const meta = await queryAniList(item.search);
-          const hasMeta = !!meta;
-          return {
-            id: item.id,
-            title: (hasMeta && meta.matchedTitle) || item.title,
-            cover: (hasMeta && meta.coverImage) || null,
-            banner: (hasMeta && (meta.bannerImage || meta.coverImage)) || null,
-            score: (hasMeta && meta.score) || '8.5',
-            year: (hasMeta && meta.year) || '2024',
-            format: (hasMeta && meta.format) || 'TV',
-            description: (hasMeta && meta.description) || '',
-            genres: (hasMeta && meta.genres) || ['Action', 'Fantasy'],
-            duration: (hasMeta && meta.duration) || '24m',
-          };
-        }));
-        return jsonRes({ featured: list }, 200, { 'Cache-Control': 'public, max-age=3600' });
+        const liveData = await getLiveFeaturedAnime();
+        if (liveData) {
+          return jsonRes({
+            featured: liveData.trending || [],
+            spotlight: liveData.spotlight || [],
+            trending: liveData.trending || [],
+            popular: liveData.popular || [],
+            topRated: liveData.topRated || []
+          }, 200, { 'Cache-Control': 'public, max-age=1800' });
+        }
+        return jsonRes({ error: 'getLiveFeaturedAnime returned null', featured: [], spotlight: [], trending: [], popular: [], topRated: [] });
       } catch (err) {
-        return jsonRes({ error: err.message }, 500);
+        return jsonRes({ error: err.message, stack: err.stack, featured: [] }, 500);
       }
     }
 

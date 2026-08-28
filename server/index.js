@@ -29,6 +29,7 @@ const {
   getStreamLinks,
   smartFetchMetadata,
   resolveAnidbId,
+  getLiveFeaturedAnime,
   anidbFetch
 } = require('./anidb');
 const {
@@ -56,41 +57,25 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
   }
 }));
 
-// ─── FEATURED ITEMS ─────────────────────────────────────────────────────────
-
-const FEATURED_ITEMS = [
-  { id: 'solo-leveling-season-2-arise-from-the-shadow-4884', title: 'Solo Leveling Season 2', search: 'Solo Leveling Season 2' },
-  { id: 'solo-leveling-4883', title: 'Solo Leveling Season 1', search: 'Solo Leveling' },
-  { id: 'attack-on-titan-457', title: 'Attack on Titan', search: 'Attack on Titan' },
-  { id: 'demon-slayer-kimetsu-no-yaiba-1217', title: 'Demon Slayer: Kimetsu no Yaiba', search: 'Demon Slayer' },
-  { id: 'jujutsu-kaisen-2552', title: 'Jujutsu Kaisen', search: 'Jujutsu Kaisen' },
-  { id: 'chainsaw-man-922', title: 'Chainsaw Man', search: 'Chainsaw Man' },
-  { id: 'one-piece-3880', title: 'One Piece', search: 'One Piece' },
-  { id: 'kaiju-no-8-2608', title: 'Kaiju No. 8', search: 'Kaiju No. 8' },
-];
+// ─── LIVE FEATURED & TRENDING SECTIONS ──────────────────────────────────────
 
 app.get('/api/featured', async (req, res) => {
   try {
-    const list = await Promise.all(FEATURED_ITEMS.map(async item => {
-      const meta = await smartFetchMetadata(item.id, item.search);
-      const hasMeta = !!meta;
-      return {
-        id: item.id,
-        title: (hasMeta && meta.matchedTitle) || item.title,
-        cover: (hasMeta && meta.coverImage) || null,
-        banner: (hasMeta && (meta.bannerImage || meta.coverImage)) || null,
-        score: (hasMeta && meta.score) || '8.5',
-        year: (hasMeta && meta.year) || '2024',
-        format: (hasMeta && meta.format) || 'TV',
-        description: (hasMeta && meta.description) || '',
-        genres: (hasMeta && meta.genres) || ['Action', 'Fantasy'],
-        duration: (hasMeta && meta.duration) || '24m',
-      };
-    }));
-    res.json({ featured: list });
+    const liveData = await getLiveFeaturedAnime();
+    if (liveData) {
+      // Backward compatibility: featured array = trending
+      return res.json({
+        featured: liveData.trending || [],
+        spotlight: liveData.spotlight || [],
+        trending: liveData.trending || [],
+        popular: liveData.popular || [],
+        topRated: liveData.topRated || []
+      });
+    }
+    res.json({ featured: [], spotlight: [], trending: [], popular: [], topRated: [] });
   } catch (err) {
     console.error('[featured error]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, featured: [] });
   }
 });
 
@@ -161,7 +146,14 @@ app.get('/api/stream/:episodeId', async (req, res) => {
   const lang = req.query.lang === 'dub' ? 'dub' : 'sub';
   try {
     const result = await getStreamLinks(episodeId, lang, animeId, ep);
-    res.json(Array.isArray(result) ? { links: result } : result);
+    const data = Array.isArray(result) ? { links: result } : { ...result };
+    if (data && data.links && Array.isArray(data.links)) {
+      data.links = data.links.map(l => ({
+        ...l,
+        url: (l.url && l.url.startsWith('http')) ? `/proxy/stream?url=${encodeURIComponent(l.url)}` : l.url
+      }));
+    }
+    res.json(data);
   } catch (err) {
     console.error('[stream error]', err.message);
     res.status(500).json({ error: err.message });
@@ -376,7 +368,7 @@ app.get('*', (req, res) => {
 // ─── START SERVER ──────────────────────────────────────────────────────────
 
 const server = app.listen(PORT, () => {
-  console.log(`\n  🎌 AniStream 2.0 running at http://localhost:${PORT}\n`);
+  console.log(`\n  [+] AniStream 2.0 running at http://localhost:${PORT}\n`);
 });
 
 server.on('error', err => {

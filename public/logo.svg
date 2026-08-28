@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 56" fill="none">
+  <defs>
+    <linearGradient id="logo-poly" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff2e63"/>
+      <stop offset="60%" stop-color="#e11d48"/>
+      <stop offset="100%" stop-color="#9f1239"/>
+    </linearGradient>
+    <linearGradient id="logo-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1c1c24"/>
+      <stop offset="100%" stop-color="#0e0e12"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Icon Emblem -->
+  <g transform="translate(4, 4)">
+    <rect width="48" height="48" rx="12" fill="url(#logo-bg)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+    <path d="M17 13L36 24L17 35V13Z" fill="url(#logo-poly)"/>
+    <path d="M17 13L27 24L17 35V13Z" fill="#ffffff" fill-opacity="0.18"/>
+    <circle cx="36" cy="24" r="2.5" fill="#ffffff"/>
+  </g>
+
+  <!-- Typography -->
+  <g transform="translate(64, 34)">
+    <text font-family="'Outfit', 'Plus Jakarta Sans', system-ui, sans-serif" font-size="22" font-weight="800" letter-spacing="-0.5" fill="#ffffff">
+      ANI<tspan fill="#e11d48">STREAM</tspan>
+    </text>
+    <text x="120" y="-1" font-family="'JetBrains Mono', monospace" font-size="8.5" font-weight="700" letter-spacing="1.5" fill="rgba(255,255,255,0.4)">
+      CINEMA
+    </text>
+  </g>
+</svg>

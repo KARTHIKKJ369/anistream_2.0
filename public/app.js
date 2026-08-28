@@ -24,6 +24,13 @@ const App = (() => {
     hlsInstance: null,
     historyData: [],
     featuredData: [],
+    spotlightData: [],
+    trendingData: [],
+    popularData: [],
+    topRatedData: [],
+    heroSlideIndex: 0,
+    heroTimer: null,
+    currentGenre: 'ALL',
     suggestionIndex: -1,
     suggestionItems: [],
     debounceTimer: null,
@@ -34,6 +41,27 @@ const App = (() => {
   };
 
   const $ = id => document.getElementById(id);
+
+  // ─── LOCAL STORAGE RESILIENT STORAGE ──────────────────────────────
+  const STORAGE_KEYS = {
+    HISTORY: 'anistream_history_v2',
+    PROGRESS: 'anistream_progress_v2'
+  };
+
+  function getLocalHistory() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.HISTORY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function setLocalHistory(history) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history.slice(0, 40)));
+    } catch (_) {}
+  }
 
   // ─── UTILITIES & HELPERS ──────────────────────────────────────────
 
@@ -62,32 +90,39 @@ const App = (() => {
     return `${m}:${s}`;
   }
 
-  let toastTimer = null;
-  function toast(msg, duration = 2800) {
+  function toast(msg, durationMs = 2800) {
     const el = $('toast');
     if (!el) return;
     el.textContent = msg;
     el.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+    clearTimeout(state._toastTimer);
+    state._toastTimer = setTimeout(() => el.classList.remove('show'), durationMs);
   }
 
-  async function api(path) {
-    const res = await fetch(path);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    return data;
+  // ─── API CLIENT ───────────────────────────────────────────────────
+
+  async function api(path, opts = {}) {
+    const res = await fetch(path, opts);
+    if (!res.ok) {
+      let errText = res.statusText;
+      try {
+        const body = await res.json();
+        if (body && body.error) errText = body.error;
+      } catch (_) {}
+      throw new Error(errText || `Request failed with status ${res.status}`);
+    }
+    return res.json();
   }
 
-  // ─── SPA HASH ROUTING ─────────────────────────────────────────────
+  // ─── NAVIGATION & ROUTER ──────────────────────────────────────────
 
   function navigateTo(hash) {
     window.location.hash = hash;
   }
 
   function goBack() {
-    if (window.history.length > 1) {
-      window.history.back();
+    if (state.previousView && state.previousView !== state.currentView && state.previousView !== 'player') {
+      navigateTo(`#/${state.previousView === 'home' ? '' : state.previousView}`);
     } else {
       navigateTo('#/');
     }
@@ -136,7 +171,24 @@ const App = (() => {
     if (linkHome) linkHome.classList.toggle('active', name === 'home');
     if (linkLib) linkLib.classList.toggle('active', name === 'history');
 
+    // Mobile Bottom Nav Sync
+    const mobHome = $('mob-nav-home');
+    const mobSearch = $('mob-nav-search');
+    const mobLib = $('mob-nav-library');
+    if (mobHome) mobHome.classList.toggle('active', name === 'home');
+    if (mobSearch) mobSearch.classList.toggle('active', name === 'results');
+    if (mobLib) mobLib.classList.toggle('active', name === 'history');
+
     window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  function focusMobileSearch() {
+    showView('home');
+    const input = $('search-input');
+    if (input) {
+      input.focus();
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   }
 
   // ─── HISTORY & PROGRESS ───────────────────────────────────────────
@@ -144,26 +196,46 @@ const App = (() => {
   async function loadHistory() {
     try {
       const data = await api('/api/history');
-      state.historyData = data.history || [];
+      const srvList = data.history || [];
+      const localList = getLocalHistory();
+      // Merge local storage + server
+      const map = new Map();
+      [...localList, ...srvList].forEach(item => {
+        if (item && item.animeId && !map.has(item.animeId)) {
+          map.set(item.animeId, item);
+        }
+      });
+      state.historyData = Array.from(map.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      setLocalHistory(state.historyData);
     } catch (_) {
-      state.historyData = [];
+      state.historyData = getLocalHistory();
     }
   }
 
   async function saveProgress(episodeNumber, animeId, animeTitle, cover = '', banner = '', currentTime = 0, duration = 0) {
+    const entry = {
+      episodeNumber,
+      animeId,
+      animeTitle,
+      cover,
+      banner,
+      currentTime,
+      duration,
+      progressPercent: duration > 0 ? Math.round((currentTime / duration) * 100) : 0,
+      timestamp: Date.now()
+    };
+
+    // Update state & local storage immediately
+    const existingIdx = state.historyData.findIndex(h => h.animeId === animeId);
+    if (existingIdx >= 0) state.historyData.splice(existingIdx, 1);
+    state.historyData.unshift(entry);
+    setLocalHistory(state.historyData);
+
     try {
       await fetch('/api/history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          episodeNumber,
-          animeId,
-          animeTitle,
-          cover,
-          banner,
-          currentTime,
-          duration,
-        }),
+        body: JSON.stringify(entry),
       });
     } catch (_) {}
   }
@@ -172,85 +244,208 @@ const App = (() => {
     if (!state.currentAnimeId) return;
     const ep = state.currentEpisodes[state.currentEpIndex];
     const epNo = ep ? ep.episodeNumber : 1;
-    try {
-      await fetch('/api/progress', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          animeId: state.currentAnimeId,
-          episodeNumber: epNo,
-          currentTime,
-          duration,
-          cover: state.currentCover || '',
-          banner: state.currentBanner || '',
-        }),
-      });
-    } catch (_) {}
+    saveProgress(epNo, state.currentAnimeId, state.currentAnimeTitle, state.currentCover, state.currentBanner, currentTime, duration);
   }
 
   function _removeHistory(animeId) {
-    fetch(`/api/history/${encodeURIComponent(animeId)}`, { method: 'DELETE' })
-      .then(() => {
-        state.historyData = state.historyData.filter(h => h.animeId !== animeId);
-        renderContinueWatching();
-        if (state.currentView === 'history') showHistory();
-        toast('Removed from watch history');
-      });
+    state.historyData = state.historyData.filter(h => h.animeId !== animeId);
+    setLocalHistory(state.historyData);
+    renderContinueWatching();
+    if (state.currentView === 'history') showHistory();
+    toast('Removed from watch history');
+
+    fetch(`/api/history/${encodeURIComponent(animeId)}`, { method: 'DELETE' }).catch(() => {});
   }
 
   async function clearHistory() {
     if (!confirm('Are you sure you want to clear your library watch history?')) return;
+    state.historyData = [];
+    setLocalHistory([]);
+    toast('Watch history cleared');
+    if (state.currentView === 'home') renderContinueWatching();
+    else if (state.currentView === 'history') showHistory();
+
     try {
       await fetch('/api/history', { method: 'DELETE' });
-      state.historyData = [];
-      toast('Watch history cleared');
-      if (state.currentView === 'home') renderContinueWatching();
-      else if (state.currentView === 'history') showHistory();
-    } catch (_) {
-      toast('Failed to clear history');
-    }
+    } catch (_) {}
   }
 
-  // ─── HOME VIEW ────────────────────────────────────────────────────
+  // ─── HOME VIEW & LIVE HERO CAROUSEL ───────────────────────────────
 
   async function showHome() {
     showView('home');
     await Promise.all([loadHistory(), loadFeatured()]);
     renderContinueWatching();
-    renderFeaturedGrid();
+    renderAllHomeGrids();
   }
 
   async function loadFeatured() {
     try {
       const data = await api('/api/featured');
       state.featuredData = data.featured || [];
-      if (state.featuredData.length > 0) {
-        renderBillboard(state.featuredData[0]);
+      state.spotlightData = data.spotlight && data.spotlight.length ? data.spotlight : state.featuredData.slice(0, 6);
+      state.trendingData = data.trending && data.trending.length ? data.trending : state.featuredData;
+      state.popularData = data.popular && data.popular.length ? data.popular : state.featuredData;
+      state.topRatedData = data.topRated && data.topRated.length ? data.topRated : state.featuredData;
+
+      if (state.spotlightData.length > 0) {
+        state.heroSlideIndex = 0;
+        renderHeroSlide(0);
+        startHeroCarousel();
       }
     } catch (e) {
-      console.error('[featured]', e.message);
+      console.error('[featured load error]', e.message);
     }
   }
 
-  function renderBillboard(item) {
+  function renderHeroSlide(idx) {
+    if (!state.spotlightData.length) return;
+    const item = state.spotlightData[idx] || state.spotlightData[0];
+    if (!item) return;
+
     const backdrop = $('home-hero-backdrop');
-    if (!backdrop || !item) return;
-
-    if (item.banner || item.cover) {
-      backdrop.style.backgroundImage = `url("${item.banner || item.cover}")`;
+    const imgUrl = item.banner || item.cover;
+    if (backdrop && imgUrl) {
+      backdrop.style.backgroundImage = `url("${imgUrl}")`;
     }
-    $('billboard-title').textContent = item.title;
-    $('billboard-score').textContent = `★ ${item.score || '8.5'}`;
-    $('billboard-year').textContent = item.year || '2025';
-    $('billboard-format').textContent = item.format || 'TV Series';
-    $('billboard-genres').textContent = (item.genres || ['Action', 'Fantasy']).join(', ');
-    $('billboard-desc').textContent = item.description || 'Watch high quality anime streaming in Otaku Cinema mode.';
 
-    const playBtn = $('billboard-play-btn');
-    if (playBtn) playBtn.onclick = () => navigateTo(`#/anime/${encodeURIComponent(item.id)}`);
+    const tagEl = $('billboard-tag');
+    if (tagEl) tagEl.textContent = `SPOTLIGHT ${String(idx + 1).padStart(2, '0')}`;
+    const titleEl = $('billboard-title');
+    if (titleEl) titleEl.textContent = item.title;
+    const scoreVal = $('billboard-score-val');
+    if (scoreVal) scoreVal.textContent = item.score || '8.5';
+    const yearEl = $('billboard-year');
+    if (yearEl) yearEl.textContent = item.year || '2025';
+    const fmtEl = $('billboard-format');
+    if (fmtEl) fmtEl.textContent = item.format || 'TV Series';
+    const studioEl = $('billboard-studio');
+    if (studioEl) studioEl.textContent = item.studio || 'Animation Studio';
+    const genreEl = $('billboard-genres');
+    if (genreEl) genreEl.textContent = (item.genres || ['Action', 'Fantasy']).slice(0, 3).join(', ');
+    const descEl = $('billboard-desc');
+    if (descEl) descEl.textContent = item.description || 'Stream this hit anime in ultra-high quality Otaku Cinema mode.';
 
-    const infoBtn = $('billboard-info-btn');
-    if (infoBtn) infoBtn.onclick = () => navigateTo(`#/anime/${encodeURIComponent(item.id)}`);
+    // Render dot indicators
+    const dotsContainer = $('hero-dots');
+    if (dotsContainer) {
+      dotsContainer.innerHTML = '';
+      state.spotlightData.forEach((_, dIdx) => {
+        const dot = document.createElement('div');
+        dot.className = `hero-dot${dIdx === idx ? ' active' : ''}`;
+        dot.onclick = () => {
+          stopHeroCarousel();
+          state.heroSlideIndex = dIdx;
+          renderHeroSlide(dIdx);
+          startHeroCarousel();
+        };
+        dotsContainer.appendChild(dot);
+      });
+    }
+  }
+
+  function startHeroCarousel() {
+    stopHeroCarousel();
+    if (state.spotlightData.length <= 1) return;
+    state.heroTimer = setInterval(() => {
+      state.heroSlideIndex = (state.heroSlideIndex + 1) % state.spotlightData.length;
+      renderHeroSlide(state.heroSlideIndex);
+    }, 5500);
+  }
+
+  function stopHeroCarousel() {
+    if (state.heroTimer) {
+      clearInterval(state.heroTimer);
+      state.heroTimer = null;
+    }
+  }
+
+  function nextHeroSlide() {
+    stopHeroCarousel();
+    if (state.spotlightData.length > 0) {
+      state.heroSlideIndex = (state.heroSlideIndex + 1) % state.spotlightData.length;
+      renderHeroSlide(state.heroSlideIndex);
+    }
+    startHeroCarousel();
+  }
+
+  function prevHeroSlide() {
+    stopHeroCarousel();
+    if (state.spotlightData.length > 0) {
+      state.heroSlideIndex = (state.heroSlideIndex - 1 + state.spotlightData.length) % state.spotlightData.length;
+      renderHeroSlide(state.heroSlideIndex);
+    }
+    startHeroCarousel();
+  }
+
+  function onHeroPlay() {
+    const item = state.spotlightData[state.heroSlideIndex] || state.spotlightData[0];
+    if (item) navigateTo(`#/anime/${encodeURIComponent(item.id)}`);
+  }
+
+  function onHeroInfo() {
+    const item = state.spotlightData[state.heroSlideIndex] || state.spotlightData[0];
+    if (item) navigateTo(`#/anime/${encodeURIComponent(item.id)}`);
+  }
+
+  function filterGenre(genre, btn) {
+    state.currentGenre = genre;
+    document.querySelectorAll('.genre-chip').forEach(c => c.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderAllHomeGrids();
+  }
+
+  function filterListByGenre(list) {
+    if (!state.currentGenre || state.currentGenre === 'ALL') return list;
+    const target = state.currentGenre.toLowerCase();
+    return list.filter(item => {
+      if (!item.genres || !Array.isArray(item.genres)) return false;
+      return item.genres.some(g => g.toLowerCase().includes(target));
+    });
+  }
+
+  function renderAllHomeGrids() {
+    renderTrendingGrid();
+    renderPopularGrid();
+    renderTopRatedGrid();
+  }
+
+  function renderTrendingGrid() {
+    const container = $('trending-grid');
+    if (!container) return;
+    container.innerHTML = '';
+    const filtered = filterListByGenre(state.trendingData);
+
+    if (!filtered.length) {
+      container.innerHTML = '<div class="empty-state"><p>No trending anime matched this genre.</p></div>';
+      return;
+    }
+
+    filtered.forEach(item => {
+      container.appendChild(buildPosterCard(item));
+    });
+  }
+
+  function renderPopularGrid() {
+    const container = $('popular-grid');
+    if (!container) return;
+    container.innerHTML = '';
+    const filtered = filterListByGenre(state.popularData);
+
+    filtered.forEach(item => {
+      container.appendChild(buildPosterCard(item));
+    });
+  }
+
+  function renderTopRatedGrid() {
+    const container = $('top-rated-grid');
+    if (!container) return;
+    container.innerHTML = '';
+    const filtered = filterListByGenre(state.topRatedData);
+
+    filtered.forEach(item => {
+      container.appendChild(buildPosterCard(item));
+    });
   }
 
   function renderContinueWatching() {
@@ -270,7 +465,7 @@ const App = (() => {
       card.className = 'landscape-card';
       card.onclick = () => navigateTo(`#/anime/${encodeURIComponent(entry.animeId)}`);
 
-      const featuredMatch = state.featuredData.find(f => f.id === entry.animeId);
+      const featuredMatch = [...state.trendingData, ...state.popularData].find(f => f.id === entry.animeId);
       const featuredThumb = featuredMatch ? (featuredMatch.banner || featuredMatch.cover) : null;
       const thumb = entry.banner || entry.cover || featuredThumb || DARK_POSTER_PLACEHOLDER;
       const progressPercent = entry.progressPercent || (entry.duration > 0 ? Math.round((entry.currentTime / entry.duration) * 100) : 0);
@@ -293,48 +488,33 @@ const App = (() => {
     });
   }
 
-  function renderFeaturedGrid() {
-    const container = $('featured-grid');
-    if (!container) return;
-    container.innerHTML = '';
-
-    state.featuredData.forEach(item => {
-      const card = buildPosterCard({
-        id: item.id,
-        title: item.title,
-        img: item.cover,
-        score: item.score,
-        year: item.year || item.format || '2024',
-      });
-      container.appendChild(card);
-    });
-  }
-
-  function buildPosterCard({ id, title, img, score, year, onRemove, progressPercent }) {
+  function buildPosterCard(item) {
     const card = document.createElement('div');
     card.className = 'poster-card';
-    card.onclick = () => navigateTo(`#/anime/${encodeURIComponent(id)}`);
+    card.onclick = () => navigateTo(`#/anime/${encodeURIComponent(item.id)}`);
 
-    const imgSrc = img || DARK_POSTER_PLACEHOLDER;
+    const imgSrc = item.cover || item.img || DARK_POSTER_PLACEHOLDER;
+    const title = item.title || 'Anime';
+    const year = item.year || item.format || '2025';
 
     card.innerHTML = `
       <div class="poster-thumb-wrap">
-        <img class="poster-thumb" src="${escHtml(imgSrc)}" alt="${escHtml(title)}" onerror="this.onerror=null; this.src='${DARK_POSTER_PLACEHOLDER}';" />
-        ${score ? `<span class="poster-score-badge">★ ${escHtml(String(score))}</span>` : ''}
-        ${progressPercent !== undefined && progressPercent > 0 ? `
-          <div class="card-progress-track">
-            <div class="card-progress-fill" style="width: ${progressPercent}%;"></div>
-          </div>
+        <img class="poster-thumb" src="${escHtml(imgSrc)}" alt="${escHtml(title)}" onerror="this.onerror=null; this.src='${DARK_POSTER_PLACEHOLDER}';" loading="lazy" />
+        ${item.score ? `
+          <span class="poster-score-badge">
+            <svg class="star-icon" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <span>${escHtml(String(item.score))}</span>
+          </span>
         ` : ''}
       </div>
       <div class="poster-body">
         <div class="poster-title">${escHtml(title)}</div>
         <div class="poster-meta">
-          <span>${escHtml(String(year || '2024'))}</span>
+          <span>${escHtml(String(year))}</span>
           <span style="color:var(--color-crimson); font-weight:700;">Watch →</span>
         </div>
       </div>
-      ${onRemove ? `<button class="card-remove-btn" title="Remove" onclick="event.stopPropagation(); App._removeHistory('${escAttr(id)}')">✕</button>` : ''}
+      ${item.onRemove ? `<button class="card-remove-btn" title="Remove" onclick="event.stopPropagation(); App._removeHistory('${escAttr(item.id)}')">✕</button>` : ''}
     `;
     return card;
   }
@@ -534,7 +714,8 @@ const App = (() => {
       if (bannerUrl) $('detail-backdrop').style.backgroundImage = `url("${bannerUrl}")`;
       if (posterUrl) $('detail-poster-img').src = posterUrl;
 
-      $('detail-score').textContent = `★ ${data.score || '8.4'}`;
+      const detailScoreVal = $('detail-score-val');
+      if (detailScoreVal) detailScoreVal.textContent = data.score || '8.4';
       $('detail-year').textContent = data.year || '2024';
       $('detail-format').textContent = data.format || 'TV Series';
       $('detail-studio').textContent = data.studio || 'Animation Studio';
@@ -689,7 +870,7 @@ const App = (() => {
 
     const sortText = $('sort-order-text');
     if (sortText) {
-      sortText.textContent = state.isEpisodeAscending ? `1 ➔ ${allEps.length}` : `${allEps.length} ➔ 1`;
+      sortText.textContent = state.isEpisodeAscending ? `1 → ${allEps.length}` : `${allEps.length} → 1`;
     }
 
     const chunkSize = 100;
@@ -765,11 +946,12 @@ const App = (() => {
   // ─── CINEMA VIDEO PLAYER ─────────────────────────────────────────
 
   async function openPlayerRoute(animeId, epNo) {
-    state.currentAnimeId = animeId;
-    if (!state.currentEpisodes.length) {
+    if (!state.currentEpisodes.length || state._loadedAnimeId !== animeId) {
+      state.currentAnimeId = animeId;
+      state._loadedAnimeId = animeId;
       try {
         const data = await api(`/api/anime/${encodeURIComponent(animeId)}`);
-        state.currentAnimeTitle = data.animeTitle || animeId;
+        state.currentAnimeTitle = data.animeTitle || data.matchedTitle || animeId;
         state.currentCover = data.thumbnail || null;
         state.currentBanner = data.bannerImage || null;
         state.currentEpisodes = data.episodes || [];
@@ -975,7 +1157,7 @@ const App = (() => {
 
   function destroyHls() {
     if (state.hlsInstance) {
-      state.hlsInstance.destroy();
+      try { state.hlsInstance.destroy(); } catch (_) {}
       state.hlsInstance = null;
     }
     const video = $('video-player');
@@ -984,7 +1166,10 @@ const App = (() => {
       video.onplaying = null;
       video.onwaiting = null;
       video.onerror = null;
-      video.src = '';
+      video.oncanplay = null;
+      video.onloadeddata = null;
+      video.removeAttribute('src');
+      video.load();
     }
   }
 
@@ -1025,10 +1210,10 @@ const App = (() => {
     if (!video) return;
     if (video.paused) {
       video.play();
-      showRippleIndicator('▶ Play');
+      showRippleIndicator('Play');
     } else {
       video.pause();
-      showRippleIndicator('❚❚ Pause');
+      showRippleIndicator('Pause');
     }
   }
 
@@ -1038,7 +1223,7 @@ const App = (() => {
     video.muted = !video.muted;
     const slider = $('volume-slider');
     if (slider) slider.value = video.muted ? 0 : video.volume;
-    showRippleIndicator(video.muted ? '🔇 Muted' : '🔊 Unmuted');
+    showRippleIndicator(video.muted ? 'Muted' : 'Unmuted');
   }
 
   function setVolume(val) {
@@ -1052,7 +1237,7 @@ const App = (() => {
     const video = $('video-player');
     if (!video || !video.duration) return;
     video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + seconds));
-    showRippleIndicator(seconds > 0 ? `+${seconds}s ⏩` : `${seconds}s ⏪`);
+    showRippleIndicator(seconds > 0 ? `+${seconds}s` : `${seconds}s`);
   }
 
   function seekPercent(pct) {
@@ -1112,8 +1297,6 @@ const App = (() => {
   }
 
   // ─── SCRUBBER & PLAYER EVENTS ────────────────────────────────────
-
-  let controlsTimeout;
 
   function initPlayerEvents() {
     const video = $('video-player');
@@ -1177,8 +1360,26 @@ const App = (() => {
       }
     });
 
+    const topBar = document.querySelector('.controls-top-bar');
+    const bottomBar = document.querySelector('.controls-bottom-bar');
+    [topBar, bottomBar].forEach(bar => {
+      if (bar) {
+        bar.addEventListener('mouseenter', () => {
+          isMouseOverControls = true;
+          resetControlsTimeout();
+        });
+        bar.addEventListener('mouseleave', () => {
+          isMouseOverControls = false;
+          resetControlsTimeout();
+        });
+      }
+    });
+
     wrap.addEventListener('mousemove', resetControlsTimeout);
-    wrap.addEventListener('mouseleave', hideControls);
+    wrap.addEventListener('mouseleave', () => {
+      isMouseOverControls = false;
+      hideControls();
+    });
     wrap.addEventListener('click', e => {
       if (e.target === video || e.target === wrap) {
         togglePlay();
@@ -1236,19 +1437,25 @@ const App = (() => {
     }
   }
 
+  let controlsTimeout = null;
+  let isMouseOverControls = false;
+
   function resetControlsTimeout() {
     const controls = $('custom-controls');
     if (!controls) return;
     controls.classList.remove('idle');
     document.body.style.cursor = 'default';
     clearTimeout(controlsTimeout);
-    controlsTimeout = setTimeout(hideControls, 3200);
+    if (!isMouseOverControls && !state.isScrubbing) {
+      controlsTimeout = setTimeout(hideControls, 3500);
+    }
   }
 
   function hideControls() {
     const video = $('video-player');
     const controls = $('custom-controls');
-    if (video && !video.paused && controls && state.currentView === 'player' && !state.isScrubbing) {
+    if (isMouseOverControls || state.isScrubbing) return;
+    if (video && !video.paused && controls && state.currentView === 'player') {
       controls.classList.add('idle');
       document.body.style.cursor = 'none';
     }
@@ -1307,14 +1514,14 @@ const App = (() => {
           setVolume(newVol);
           const slider = $('volume-slider');
           if (slider) slider.value = newVol;
-          showRippleIndicator(`🔊 ${Math.round(newVol * 100)}%`);
+          showRippleIndicator(`Volume ${Math.round(newVol * 100)}%`);
         } else if (e.key === 'ArrowDown') {
           e.preventDefault();
           const newVol = Math.max(0, video.volume - 0.1);
           setVolume(newVol);
           const slider = $('volume-slider');
           if (slider) slider.value = newVol;
-          showRippleIndicator(`🔉 ${Math.round(newVol * 100)}%`);
+          showRippleIndicator(`Volume ${Math.round(newVol * 100)}%`);
         } else if (e.key === 'n' || e.key === 'N') {
           e.preventDefault();
           playNextEp();
@@ -1435,6 +1642,12 @@ const App = (() => {
     jumpToLatestEpisode,
     showShortcutsModal,
     hideShortcutsModal,
+    prevHeroSlide,
+    nextHeroSlide,
+    onHeroPlay,
+    onHeroInfo,
+    filterGenre,
+    focusMobileSearch,
   };
 })();
 

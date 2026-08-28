@@ -6,17 +6,29 @@
   <meta name="description" content="AniStream — Otaku Cinema Anime Streaming" />
   <title>AniStream — Otaku Cinema</title>
 
-  <!-- Google Fonts: Inter High-Contrast Sans -->
+  <!-- Google Fonts: Outfit (Brand/Display), Plus Jakarta Sans (UI/Body), JetBrains Mono (Tech) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
 
   <!-- HLS.js for stream playback -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
 
-  <link rel="stylesheet" href="style.css?v=2.2.0" />
+  <link rel="stylesheet" href="style.css?v=2.3.0" />
 </head>
 <body>
+
+  <!-- Shared Global SVG Gradients -->
+  <svg style="position: absolute; width: 0; height: 0; overflow: hidden;" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#ff2e63"/>
+        <stop offset="60%" stop-color="#e11d48"/>
+        <stop offset="100%" stop-color="#9f1239"/>
+      </linearGradient>
+    </defs>
+  </svg>
 
   <!-- ═══════════════════════════════════════════════════════════
        SIDE DRAWER NAVIGATION
@@ -24,9 +36,17 @@
   <div class="side-drawer-overlay hidden" id="side-drawer-overlay" onclick="App.toggleMenu()"></div>
   <aside class="side-drawer hidden" id="side-drawer">
     <div class="drawer-header">
-      <div class="drawer-brand">
-        <span class="brand-badge">▶</span>
-        <h2>AniStream</h2>
+      <div class="brand-logo">
+        <svg class="brand-logo-icon" width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="#181822" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+          <path d="M10 7L24 16L10 25V7Z" fill="url(#brand-grad)"/>
+          <path d="M10 7L18 16L10 25V7Z" fill="rgba(255,255,255,0.2)"/>
+          <circle cx="24" cy="16" r="2.2" fill="#ffffff"/>
+        </svg>
+        <div class="brand-title-wrap">
+          <span class="brand-title">ANI<span class="brand-accent">STREAM</span></span>
+          <span class="brand-subtitle">CINEMA</span>
+        </div>
       </div>
       <button class="btn-icon" onclick="App.toggleMenu()" aria-label="Close menu">✕</button>
     </div>
@@ -45,7 +65,7 @@
       </a>
     </div>
     <div class="drawer-footer">
-      <div class="version-tag">AniStream 2.0 • Otaku Cinema Edition</div>
+      <div class="version-tag">AniStream 2.0 • Otaku Cinema</div>
     </div>
   </aside>
 
@@ -60,8 +80,18 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
         </button>
         <a href="#/" class="nav-bar__brand">
-          <span class="nav-bar__logo-icon">▶</span>
-          <span>AniStream</span>
+          <div class="brand-logo">
+            <svg class="brand-logo-icon" width="28" height="28" viewBox="0 0 32 32" fill="none">
+              <rect width="32" height="32" rx="8" fill="#181822" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+              <path d="M10 7L24 16L10 25V7Z" fill="url(#brand-grad)"/>
+              <path d="M10 7L18 16L10 25V7Z" fill="rgba(255,255,255,0.2)"/>
+              <circle cx="24" cy="16" r="2.2" fill="#ffffff"/>
+            </svg>
+            <div class="brand-title-wrap">
+              <span class="brand-title">ANI<span class="brand-accent">STREAM</span></span>
+              <span class="brand-subtitle">CINEMA</span>
+            </div>
+          </div>
         </a>
         <div class="nav-bar__links">
           <a href="#/" class="nav-bar__link" id="nav-link-home">Cinema</a>
@@ -76,7 +106,7 @@
             id="search-input"
             class="search-box__input"
             type="text"
-            placeholder="Search anime series, movies..."
+            placeholder="Search anime, movies, genres..."
             autocomplete="off"
             spellcheck="false"
             oninput="App.onSearchInput(this.value)"
@@ -105,18 +135,22 @@
   ═══════════════════════════════════════════════════════════ -->
   <main class="view active" id="view-home">
     
-    <!-- Featured Billboard Hero -->
+    <!-- Dynamic Spotlight Hero Billboard -->
     <div class="billboard-hero" id="billboard-hero">
       <div class="billboard-hero__backdrop" id="home-hero-backdrop"></div>
       <div class="billboard-hero__gradient"></div>
       
       <div class="billboard-hero__content">
-        <div class="billboard-hero__tag" id="billboard-tag">★ Featured Anime</div>
+        <div class="billboard-hero__tag" id="billboard-tag">SPOTLIGHT 01</div>
         <h1 class="billboard-hero__title" id="billboard-title">Solo Leveling</h1>
         <div class="billboard-hero__meta" id="billboard-meta">
-          <span class="score-badge" id="billboard-score">★ 8.5</span>
+          <span class="score-badge" id="billboard-score">
+            <svg class="star-icon" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <span id="billboard-score-val">8.7</span>
+          </span>
           <span class="detail-badge" id="billboard-year">2025</span>
           <span class="detail-badge" id="billboard-format">TV Series</span>
+          <span class="detail-badge" id="billboard-studio">A-1 Pictures</span>
           <span class="detail-badge" id="billboard-genres">Action, Fantasy</span>
         </div>
         <p class="billboard-hero__desc" id="billboard-desc">
@@ -124,14 +158,21 @@
         </p>
         
         <div class="billboard-hero__actions">
-          <button class="btn-crimson" id="billboard-play-btn" onclick="App.navigateTo('#/anime/solo-leveling-season-2-arise-from-the-shadow-4884')">
+          <button class="btn-crimson" id="billboard-play-btn" onclick="App.onHeroPlay()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg>
-            <span>Watch Now</span>
+            <span>Watch Episode 1</span>
           </button>
-          <button class="btn-glass" id="billboard-info-btn" onclick="App.navigateTo('#/anime/solo-leveling-season-2-arise-from-the-shadow-4884')">
+          <button class="btn-glass" id="billboard-info-btn" onclick="App.onHeroInfo()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-            <span>Details</span>
+            <span>Series Details</span>
           </button>
+        </div>
+
+        <!-- Carousel Indicators -->
+        <div class="hero-carousel-nav" id="hero-carousel-nav">
+          <button class="hero-carousel-arrow" onclick="App.prevHeroSlide()" title="Previous slide">‹</button>
+          <div class="hero-dots" id="hero-dots"></div>
+          <button class="hero-carousel-arrow" onclick="App.nextHeroSlide()" title="Next slide">›</button>
         </div>
       </div>
     </div>
@@ -139,27 +180,69 @@
     <!-- Content Sections -->
     <div class="section-container">
       
+      <!-- Genre Filter Bar (Clean Minimalist Chips) -->
+      <div class="genre-filter-bar" id="genre-filter-bar">
+        <button class="genre-chip active" onclick="App.filterGenre('ALL', this)">All</button>
+        <button class="genre-chip" onclick="App.filterGenre('Action', this)">Action</button>
+        <button class="genre-chip" onclick="App.filterGenre('Adventure', this)">Adventure</button>
+        <button class="genre-chip" onclick="App.filterGenre('Fantasy', this)">Fantasy</button>
+        <button class="genre-chip" onclick="App.filterGenre('Sci-Fi', this)">Sci-Fi</button>
+        <button class="genre-chip" onclick="App.filterGenre('Romance', this)">Romance</button>
+        <button class="genre-chip" onclick="App.filterGenre('Supernatural', this)">Supernatural</button>
+        <button class="genre-chip" onclick="App.filterGenre('Comedy', this)">Comedy</button>
+        <button class="genre-chip" onclick="App.filterGenre('Drama', this)">Drama</button>
+        <button class="genre-chip" onclick="App.filterGenre('Shounen', this)">Shounen</button>
+        <button class="genre-chip" onclick="App.filterGenre('Mystery', this)">Mystery</button>
+        <button class="genre-chip" onclick="App.filterGenre('Psychological', this)">Psychological</button>
+      </div>
+
       <!-- Continue Watching Row (16:9 Landscape) -->
       <section class="section-block" id="continue-section">
         <div class="section-header">
-          <h2 class="section-title">Continue Watching</h2>
-          <span class="section-subtitle">Pick up right where you left off</span>
+          <div>
+            <h2 class="section-title">Continue Watching</h2>
+            <span class="section-subtitle">Pick up right where you left off</span>
+          </div>
         </div>
         <div class="carousel-wrapper">
           <div class="landscape-grid" id="continue-cards"></div>
         </div>
         <div class="empty-state hidden" id="no-history">
-          <p>Your watch history is empty. Start streaming any series!</p>
+          <p>Your watch history is empty. Start streaming any series.</p>
         </div>
       </section>
 
-      <!-- Featured Recommendations (2:3 Portrait) -->
-      <section class="section-block">
+      <!-- Live Trending Now Section -->
+      <section class="section-block" id="trending-section">
         <div class="section-header">
-          <h2 class="section-title">Trending &amp; Popular</h2>
-          <span class="section-subtitle">Handpicked Otaku Cinema selections</span>
+          <div>
+            <h2 class="section-title">Trending Now</h2>
+            <span class="section-subtitle">Top anime broadcasting worldwide this week</span>
+          </div>
         </div>
-        <div class="poster-grid" id="featured-grid"></div>
+        <div class="poster-grid" id="trending-grid"></div>
+      </section>
+
+      <!-- Live Most Popular Section -->
+      <section class="section-block" id="popular-section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Popular Anime</h2>
+            <span class="section-subtitle">Most streamed and highly recognized series</span>
+          </div>
+        </div>
+        <div class="poster-grid" id="popular-grid"></div>
+      </section>
+
+      <!-- Live Top Rated Masterpieces -->
+      <section class="section-block" id="top-rated-section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Top Rated Masterpieces</h2>
+            <span class="section-subtitle">Critically acclaimed works with highest community scores</span>
+          </div>
+        </div>
+        <div class="poster-grid" id="top-rated-grid"></div>
       </section>
 
     </div>
@@ -178,7 +261,9 @@
       </div>
       <div class="poster-grid" id="results-grid"></div>
       <div class="empty-state hidden" id="no-results">
-        <div style="font-size:48px; margin-bottom:12px;">🔍</div>
+        <div class="empty-state-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </div>
         <p>No matching anime titles found. Try checking the spelling or query.</p>
       </div>
     </div>
@@ -195,14 +280,17 @@
       <!-- Header Row: Poster + Info + Actions -->
       <div class="detail-header-row">
         <div class="detail-poster-wrap">
-          <img class="detail-poster-img" id="detail-poster-img" src="" alt="Anime Poster" />
+          <img class="detail-poster-img" id="detail-poster-img" alt="Anime Poster" />
         </div>
 
         <div class="detail-title-col">
           <button class="btn-ghost" onclick="App.goBack()" style="margin-bottom:16px;">← Back</button>
           <h1 class="detail-title" id="detail-title">Anime Title</h1>
           <div class="detail-meta-row">
-            <span class="score-badge" id="detail-score">★ 8.4</span>
+            <span class="score-badge" id="detail-score">
+              <svg class="star-icon" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              <span id="detail-score-val">8.4</span>
+            </span>
             <span class="detail-badge" id="detail-year">2025</span>
             <span class="detail-badge" id="detail-format">TV Series</span>
             <span class="detail-badge" id="detail-studio">Studio</span>
@@ -244,15 +332,21 @@
         <div class="meta-card">
           <h3 class="meta-card-title">Stream Technical Specs</h3>
           <div class="stream-spec-row">
-            <span class="stream-icon">🎬</span>
+            <span class="stream-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>
+            </span>
             <div><strong>Video Stream:</strong> <span id="stream-video-spec">HLS 1080p Master — H.264 SDR</span></div>
           </div>
           <div class="stream-spec-row">
-            <span class="stream-icon">🎵</span>
+            <span class="stream-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+            </span>
             <div><strong>Audio Codec:</strong> <span id="stream-audio-spec">Japanese / English AAC — Stereo 48kHz</span></div>
           </div>
           <div class="stream-spec-row">
-            <span class="stream-icon">💬</span>
+            <span class="stream-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            </span>
             <div><strong>Subtitles:</strong> <span id="stream-sub-spec">Full English Dialogue Subtitles</span></div>
           </div>
         </div>
@@ -267,7 +361,7 @@
           </div>
           <div class="episodes-header-controls">
             <button class="btn-sort-order" id="btn-sort-order" onclick="App.toggleEpisodeSort()" title="Toggle Ascending / Descending">
-              <span id="sort-order-text">1 ➔ End</span>
+              <span id="sort-order-text">1 → End</span>
             </button>
             <button class="btn-jump-latest" id="btn-jump-latest" onclick="App.jumpToLatestEpisode()" title="Jump to the latest released episode">
               Latest Ep
@@ -304,10 +398,10 @@
     <div class="player-container">
       
       <!-- Video Viewport -->
-      <div class="player-viewport" id="video-wrap">
-        <video id="video-player" class="player-video" preload="auto" crossorigin="anonymous" playsinline></video>
+      <div class="player-video-wrap" id="video-wrap">
+        <video id="video-player" class="player-video" preload="none" playsinline></video>
         
-        <!-- Animated Loading Overlay -->
+        <!-- Big Center Play Button Overlay -->
         <div class="video-loading" id="video-loading">
           <div class="spinner"></div>
           <p id="video-loading-text">Fetching high-bitrate stream...</p>
@@ -315,7 +409,9 @@
         
         <!-- Error Overlay -->
         <div class="video-error hidden" id="video-error">
-          <div style="font-size:48px;">⚠️</div>
+          <div class="empty-state-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          </div>
           <p id="video-error-text">Stream error occurred.</p>
           <div style="display:flex; gap:12px;">
             <button class="btn-crimson" onclick="App.retryStream()">Try Again</button>
@@ -445,8 +541,10 @@
       </div>
       <div class="poster-grid" id="history-grid"></div>
       <div class="empty-state hidden" id="no-history-page">
-        <div style="font-size:48px; margin-bottom:12px;">🍿</div>
-        <p>Your library is empty. Watch episodes to track your anime progress!</p>
+        <div class="empty-state-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="4"></rect><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"></path></svg>
+        </div>
+        <p>Your library is empty. Watch episodes to track your anime progress.</p>
       </div>
     </div>
   </main>
@@ -457,7 +555,7 @@
   <div class="modal-overlay hidden" id="shortcuts-modal" onclick="App.hideShortcutsModal(event)">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 class="modal-title">Otaku Cinema Keyboard Shortcuts</h3>
+        <h3 class="modal-title">Keyboard Shortcuts</h3>
         <button class="btn-icon" onclick="App.hideShortcutsModal()">✕</button>
       </div>
       <div class="shortcuts-grid">
@@ -475,9 +573,29 @@
     </div>
   </div>
 
+  <!-- Mobile Bottom Navigation Bar (App Experience on Phones) -->
+  <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+    <a href="#/" class="mobile-nav-item active" id="mob-nav-home">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+      <span>Cinema</span>
+    </a>
+    <a href="#/search" class="mobile-nav-item" id="mob-nav-search" onclick="event.preventDefault(); App.focusMobileSearch();">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <span>Search</span>
+    </a>
+    <a href="#/library" class="mobile-nav-item" id="mob-nav-library">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+      <span>Library</span>
+    </a>
+    <a href="javascript:void(0)" class="mobile-nav-item" onclick="App.showShortcutsModal()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+      <span>Shortcuts</span>
+    </a>
+  </nav>
+
   <!-- Toast Notification -->
   <div class="toast" id="toast"></div>
 
-  <script src="app.js?v=2.2.0"></script>
+  <script src="app.js?v=2.6.0"></script>
 </body>
 </html>

@@ -22,7 +22,6 @@ npx wrangler deploy
 
 echo ""
 echo "  ✅ Deployment complete!"
-echo "  📋 Copy the deployed Worker URL (e.g. https://anistream-proxy.<your-subdomain>.workers.dev)"
-echo "     and add it to your .env file on both Mac and Azure VM:"
-echo "     CF_WORKER_URL=https://anistream-proxy.<your-subdomain>.workers.dev"
+echo "  🌐 Your Full-Stack AniStream app is live on Cloudflare Workers!"
+echo "     Access it at your workers.dev URL or bind your custom domain in the Cloudflare Dashboard."
 echo ""
