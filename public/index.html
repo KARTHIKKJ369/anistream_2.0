@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AniStream - Otaku Cinema Anime Streaming" />
+  <title>AniStream</title>
+
+  <!-- Google Fonts: Inter & Caveat -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Caveat:wght@700&display=swap" rel="stylesheet" />
+
+  <!-- HLS.js for stream playback -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SIDE DRAWER MENU
+  ═══════════════════════════════════════════════════════════ -->
+  <div class="side-drawer-overlay hidden" id="side-drawer-overlay" onclick="App.toggleMenu()"></div>
+  <aside class="side-drawer" id="side-drawer">
+    <div class="drawer-header">
+      <h2>AniStream</h2>
+      <button class="btn-ghost" onclick="App.toggleMenu()">✕</button>
+    </div>
+    <div class="drawer-links">
+      <a href="#" onclick="App.showHome(); App.toggleMenu(); return false;">Cinema Gallery</a>
+      <a href="#" onclick="App.showHistory(); App.toggleMenu(); return false;">My Library</a>
+      <a href="#" onclick="alert('Settings coming soon!'); App.toggleMenu(); return false;">Settings</a>
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       GLOBAL CINEMATIC NAVIGATION
+  ═══════════════════════════════════════════════════════════ -->
+  <nav class="cinematic-nav">
+    <div class="nav-left">
+      <button class="nav-icon-btn" onclick="App.toggleMenu()">≡</button>
+      <button class="nav-icon-btn" onclick="App.showHome()">‹</button>
+      <button class="nav-icon-btn">›</button>
+    </div>
+
+    <div class="nav-center">
+      <div class="cinematic-search-pill">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input
+          id="search-input"
+          class="cinematic-search-input"
+          type="text"
+          placeholder="Search..."
+          autocomplete="off"
+          spellcheck="false"
+          oninput="App.onSearchInput(this.value)"
+          onkeydown="App.onSearchKeyDown(event)"
+        />
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+      </div>
+      <!-- Instant Suggestions -->
+      <div class="suggestions-popover hidden" id="suggestions-dropdown">
+        <div id="suggestions-list"></div>
+      </div>
+    </div>
+
+    <div class="nav-right">
+      <!-- Empty space for flexbox balance -->
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       CINEMA HOME VIEW
+  ═══════════════════════════════════════════════════════════ -->
+  <main class="view active cinematic-home" id="view-home">
+    
+    <!-- Full Bleed Hero Backdrop -->
+    <div class="cinematic-hero-backdrop" id="home-hero-backdrop"></div>
+    <div class="cinematic-hero-gradient"></div>
+
+    <!-- Hero Content Overlay -->
+    <div class="cinematic-hero-content">
+      <h1 class="cinematic-hero-title" id="billboard-title">Solo Leveling</h1>
+      <div class="cinematic-hero-subtitle" id="billboard-meta">2025 | 16+ | 24m | Action, Fantasy</div>
+      <p class="cinematic-hero-desc" id="billboard-desc">
+        Mastering his new abilities in secret, Jin-U must battle humanity's toughest foes to save his mother.
+      </p>
+      <div class="cinematic-hero-starring" id="billboard-starring">
+        Starring: Taito Ban, Genta Nakamura, Reina Ueda
+      </div>
+      
+      <button class="btn-cinematic-play" id="billboard-play-btn" onclick="App.openAnime('solo-leveling-season-2-arise-from-the-shadow-4884', 'Solo Leveling Season 2')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg>
+        <span>Watch Now</span>
+      </button>
+    </div>
+
+    <!-- Horizontal Carousels -->
+    <div class="cinematic-carousels">
+      
+      <section class="carousel-section" id="continue-section">
+        <h2 class="carousel-title">Continue Watching</h2>
+        <div class="carousel-wrapper">
+          <div class="carousel-track" id="continue-cards"></div>
+          <button class="carousel-arrow right" onclick="App.scrollCarousel('continue-cards', 1)">›</button>
+        </div>
+        <div class="empty-state hidden" id="no-history" style="text-align: left; padding: 20px 40px;">
+          <p>Your watch history is empty.</p>
+        </div>
+      </section>
+
+      <section class="carousel-section">
+        <h2 class="carousel-title">More for you</h2>
+        <div class="carousel-wrapper">
+          <div class="carousel-track" id="featured-grid"></div>
+          <button class="carousel-arrow right" onclick="App.scrollCarousel('featured-grid', 1)">›</button>
+        </div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SEARCH RESULTS VIEW
+  ═══════════════════════════════════════════════════════════ -->
+  <main class="view" id="view-results">
+    <section class="section-container">
+      <div class="section-header">
+        <div>
+          <button class="btn-ghost" onclick="App.showHome()">← Back to Home</button>
+          <h2 class="section-title" id="results-title" style="margin-top:16px;">Results</h2>
+        </div>
+      </div>
+      <div class="poster-grid" id="results-grid"></div>
+      <div class="empty-state hidden" id="no-results">
+        <p>No matching anime titles found.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       ANIME DETAIL VIEW
+  ═══════════════════════════════════════════════════════════ -->
+  <main class="view" id="view-detail">
+    <div class="detail-hero" id="detail-backdrop"></div>
+
+    <div class="detail-container">
+      
+      <!-- Poster + Action Header Row -->
+      <div class="detail-header-row">
+        <div class="detail-poster-wrap">
+          <img class="detail-poster-img" id="detail-poster-img" src="" alt="Poster" />
+        </div>
+
+        <div class="detail-title-col">
+          <h1 class="detail-title" id="detail-title">Anime Title</h1>
+          <div class="detail-meta-row">
+            <span class="score-badge" id="detail-score">★ 8.4</span>
+            <span class="detail-badge" id="detail-year">2025</span>
+            <span class="detail-badge" id="detail-format">TV Series</span>
+            <span class="detail-badge" id="detail-studio">Studio</span>
+          </div>
+
+          <div class="detail-action-bar">
+            <button class="btn-crimson" id="detail-play-btn" onclick="App.playEpisode(0)">
+              <span>▶ Play Episode 1</span>
+            </button>
+            <button class="btn-ghost" id="btn-sub" onclick="App.setLang('sub')">
+              SUB (JPN)
+            </button>
+            <button class="btn-ghost" id="btn-dub" onclick="App.setLang('dub')">
+              DUB (ENG)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <p class="body" id="detail-desc" style="margin-bottom:32px; max-width:900px; font-size:15px; line-height:1.65; color:var(--color-text-main);"></p>
+
+      <!-- 2-Column Media Specs Grid -->
+      <div class="meta-cards-grid">
+        <div class="meta-card">
+          <h3 style="font-size:16px; margin-bottom:16px; color:#fff;">Media Information</h3>
+          <table class="meta-table">
+            <tr><td class="label">Genres</td><td class="val" id="meta-genres">Action, Fantasy</td></tr>
+            <tr><td class="label">Studio</td><td class="val" id="meta-studio">Studio</td></tr>
+            <tr><td class="label">Format</td><td class="val" id="meta-format">TV Series</td></tr>
+            <tr><td class="label">Status</td><td class="val" id="meta-status">Finished Airing</td></tr>
+            <tr><td class="label">Duration</td><td class="val" id="meta-duration">24m per ep</td></tr>
+          </table>
+        </div>
+
+        <div class="meta-card">
+          <h3 style="font-size:16px; margin-bottom:16px; color:#fff;">Stream Technical Specs</h3>
+          <div class="stream-spec-row">
+            <span class="stream-icon">🎬</span>
+            <div><strong>Video:</strong> <span id="stream-video-spec">HLS 1080p - H264 - SDR</span></div>
+          </div>
+          <div class="stream-spec-row">
+            <span class="stream-icon">🎵</span>
+            <div><strong>Audio:</strong> <span id="stream-audio-spec">Japanese / English AAC - Stereo</span></div>
+          </div>
+          <div class="stream-spec-row">
+            <span class="stream-icon">💬</span>
+            <div><strong>Subtitles:</strong> <span id="stream-sub-spec">English Subtitles (SUB)</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cast & Characters Section -->
+      <div style="margin-bottom:40px;" id="cast-section">
+        <h3 style="font-size:18px; margin-bottom:16px; color:#fff;">Cast &amp; Characters</h3>
+        <div class="cast-grid" id="cast-grid"></div>
+      </div>
+
+      <!-- Episodes Grid -->
+      <div style="margin-bottom:48px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <h3 style="font-size:18px; color:#fff;">Episodes</h3>
+          <span style="font-size:13px; color:var(--color-text-muted);" id="episodes-count">0 Episodes</span>
+        </div>
+        <div class="episodes-grid" id="episode-list"></div>
+      </div>
+
+      <!-- Recommendations Grid -->
+      <div style="margin-bottom:40px;" id="recommendations-section">
+        <h3 style="font-size:18px; margin-bottom:16px; color:#fff;">More Like This</h3>
+        <div class="poster-grid" id="recommendations-grid"></div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       CINEMA VIDEO PLAYER VIEW
+  ═══════════════════════════════════════════════════════════ -->
+  <main class="view" id="view-player">
+    <div class="player-container">
+      
+      <!-- Custom YouTube-Style Player Viewport -->
+      <div class="player-viewport" id="video-wrap">
+        <video id="video-player" class="player-video" preload="auto" crossorigin="anonymous"></video>
+        
+        <!-- Loading Overlay -->
+        <div class="video-loading" id="video-loading">
+          <div class="spinner"></div>
+          <p id="video-loading-text">Loading stream...</p>
+        </div>
+        
+        <!-- Error Overlay -->
+        <div class="video-error hidden" id="video-error">
+          <p id="video-error-text">Stream error.</p>
+          <button class="btn-cinematic" onclick="App.retryStream()">Try Again</button>
+        </div>
+        
+        <!-- Custom Controls Overlay -->
+        <div class="custom-controls" id="custom-controls">
+          <!-- Top Bar inside controls -->
+          <div class="controls-top-bar">
+            <button class="btn-glass" onclick="App.closePlayer()">← Back</button>
+            <div class="controls-title">
+              <span id="player-anime-title">Anime Title</span>
+              <span class="score-badge" style="margin-left:8px;" id="player-ep-badge">Ep 1</span>
+            </div>
+            <div></div> <!-- Spacer -->
+          </div>
+          
+          <!-- Bottom Controls -->
+          <div class="controls-bottom-bar">
+            <!-- Scrubber / Progress Bar -->
+            <div class="progress-container" id="progress-container" onclick="App.seekVideo(event)">
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progress-fill"></div>
+              </div>
+            </div>
+            
+            <div class="controls-row">
+              <div class="controls-left">
+                <button class="control-btn" id="play-pause-btn" onclick="App.togglePlay()">
+                  <svg id="icon-play" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  <svg id="icon-pause" class="hidden" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                </button>
+                <button class="control-btn" id="mute-btn" onclick="App.toggleMute()">
+                  <svg id="icon-vol" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                  <svg id="icon-mute" class="hidden" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+                </button>
+                <input type="range" id="volume-slider" class="volume-slider" min="0" max="1" step="0.05" value="1" oninput="App.setVolume(this.value)" />
+                <div class="time-display">
+                  <span id="time-current">0:00</span> / <span id="time-duration">0:00</span>
+                </div>
+              </div>
+              
+              <div class="controls-right">
+                <button class="btn-glass" id="prev-ep-btn" onclick="App.playPrevEp()">← Prev</button>
+                <button class="btn-glass" id="next-ep-btn" onclick="App.playNextEp()">Next →</button>
+                <div style="display:flex; align-items:center; gap:8px;" id="quality-pills"></div>
+                <button class="control-btn" onclick="App.toggleFullscreen()">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       LIBRARY / HISTORY VIEW
+  ═══════════════════════════════════════════════════════════ -->
+  <main class="view" id="view-history">
+    <section class="section-container">
+      <div class="section-header">
+        <h2 class="section-title">My Library &amp; History</h2>
+        <button class="btn-ghost" onclick="App.clearHistory()">Clear History</button>
+      </div>
+      <div class="poster-grid" id="history-grid"></div>
+      <div class="empty-state hidden" id="no-history-page">
+        <p>Your library history is empty.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
