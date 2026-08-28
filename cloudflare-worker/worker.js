@@ -638,8 +638,8 @@ export default {
       }
     }
 
-    // ── Dedicated CORS Stream Relay: /proxy-stream?url=... ──────────────────
-    if (url.pathname === '/proxy-stream') {
+    // ── Dedicated CORS Stream Relay: /proxy/stream or /proxy-stream?url=... ──────────────────
+    if (url.pathname === '/proxy/stream' || url.pathname === '/proxy-stream') {
       const targetUrl = url.searchParams.get('url');
       if (!targetUrl) {
         return new Response('Missing url param', { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
@@ -674,7 +674,7 @@ export default {
           const trimmed = line.trim();
           if (!trimmed) return line;
           const absolute = trimmed.startsWith('http') ? trimmed : new URL(trimmed, base).toString();
-          return `${workerOrigin}/proxy-stream?url=${encodeURIComponent(absolute)}`;
+          return `${workerOrigin}/proxy/stream?url=${encodeURIComponent(absolute)}`;
         });
 
         return new Response(rewritten, {
