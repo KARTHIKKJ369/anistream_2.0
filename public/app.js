@@ -1372,13 +1372,20 @@ const App = (() => {
           isMouseOverControls = false;
           resetControlsTimeout();
         });
+        bar.addEventListener('mousemove', (e) => {
+          e.stopPropagation();
+          isMouseOverControls = true;
+          resetControlsTimeout();
+        });
       }
     });
 
     wrap.addEventListener('mousemove', resetControlsTimeout);
-    wrap.addEventListener('mouseleave', () => {
-      isMouseOverControls = false;
-      hideControls();
+    wrap.addEventListener('mouseleave', (e) => {
+      if (!wrap.contains(e.relatedTarget)) {
+        isMouseOverControls = false;
+        hideControls();
+      }
     });
     wrap.addEventListener('click', e => {
       if (e.target === video || e.target === wrap) {
