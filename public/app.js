@@ -808,102 +808,39 @@ const App = (() => {
     destroyHls();
 
     try {
-      let streamData = null;
-      try {
-        const streamEndpoint = `/api/stream/${encodeURIComponent(ep.episodeId)}?lang=${state.currentLang}&animeId=${encodeURIComponent(state.currentAnimeId || '')}&ep=${ep.episodeNumber}`;
-        streamData = await api(streamEndpoint);
-      } catch (srvErr) {
-        console.warn('[Server stream notice]:', srvErr.message);
-      }
+      const streamEndpoint = `/api/stream/${encodeURIComponent(ep.episodeId)}?lang=${state.currentLang}&animeId=${encodeURIComponent(state.currentAnimeId || '')}&ep=${ep.episodeNumber}`;
+      const data = await api(streamEndpoint);
+      state.streamLinks = data.links || [];
 
-      // If server returned no links/embed, fallback to client-direct AniDB language fetch
-      if (!streamData || (!streamData.links.length && !streamData.embedUrl)) {
-        if (/^\d+$/.test(String(ep.episodeId))) {
-          try {
-            const directLangRes = await fetch(`https://anidb.app/api/frontend/episode/${ep.episodeId}/languages`);
-            if (directLangRes.ok) {
-              const langJson = await directLangRes.json();
-              const langCode = state.currentLang === 'dub' ? 'eng' : 'jpn';
-              const languages = Array.isArray(langJson) ? langJson : (langJson.languages || []);
-              const match = languages.find(l => l && l.code === langCode) || languages[0];
-              if (match && match.embed_url) {
-                streamData = {
-                  links: [],
-                  embedUrl: match.embed_url,
-                  streamType: 'embed'
-                };
-              }
-            }
-          } catch (_) {}
-        }
-      }
-
-      if (!streamData || (!streamData.links.length && !streamData.embedUrl)) {
-        streamData = { links: [], embedUrl: `https://anidb.app/embed/${ep.episodeId}` };
-      }
-
-      state.streamLinks = streamData.links || [];
-      state.embedUrl = streamData.embedUrl || null;
-
-      // Mode A: Native Direct HLS Video Player
-      if (state.streamLinks.length > 0) {
-        const embed = $('embed-player');
-        if (embed) {
-          embed.classList.add('hidden');
-          embed.src = 'about:blank';
-        }
-        $('video-player').classList.remove('hidden');
-
-        renderQualityPills();
-        const preferred = pickQuality(state.currentQuality);
-
-        let resumeTime = 0;
-        try {
-          const progRes = await api(`/api/progress/${encodeURIComponent(state.currentAnimeId)}`);
-          if (progRes && progRes.progress && progRes.progress.episodeNumber === ep.episodeNumber && progRes.progress.currentTime > 10) {
-            resumeTime = progRes.progress.currentTime;
-          }
-        } catch (_) {}
-
-        await loadStream(preferred.url, resumeTime);
-
-        await saveProgress(
-          ep.episodeNumber,
-          state.currentAnimeId,
-          state.currentAnimeTitle,
-          state.currentCover || '',
-          state.currentBanner || '',
-          resumeTime,
-          0
-        );
-
-        if (resumeTime > 10) {
-          toast(`Resumed at ${formatTime(resumeTime)}`);
-        }
-      } else if (state.embedUrl) {
-        // Mode B: Seamless Cinema Embed Player (100% Cloudflare Bypass on hosted servers)
-        destroyHls();
-        $('video-player').classList.add('hidden');
-        const embed = $('embed-player');
-        if (embed) {
-          embed.classList.remove('hidden');
-          embed.src = state.embedUrl;
-        }
-        $('video-loading').classList.add('hidden');
-        $('video-error').classList.add('hidden');
-        $('quality-pills').innerHTML = '<span class="quality-pill active">Auto HD</span>';
-
-        await saveProgress(
-          ep.episodeNumber,
-          state.currentAnimeId,
-          state.currentAnimeTitle,
-          state.currentCover || '',
-          state.currentBanner || '',
-          0,
-          0
-        );
-      } else {
+      if (!state.streamLinks.length) {
         throw new Error(`No stream available for Episode ${ep.episodeNumber} in ${state.currentLang.toUpperCase()}.`);
+      }
+
+      renderQualityPills();
+      const preferred = pickQuality(state.currentQuality);
+
+      let resumeTime = 0;
+      try {
+        const progRes = await api(`/api/progress/${encodeURIComponent(state.currentAnimeId)}`);
+        if (progRes && progRes.progress && progRes.progress.episodeNumber === ep.episodeNumber && progRes.progress.currentTime > 10) {
+          resumeTime = progRes.progress.currentTime;
+        }
+      } catch (_) {}
+
+      await loadStream(preferred.url, resumeTime);
+
+      await saveProgress(
+        ep.episodeNumber,
+        state.currentAnimeId,
+        state.currentAnimeTitle,
+        state.currentCover || '',
+        state.currentBanner || '',
+        resumeTime,
+        0
+      );
+
+      if (resumeTime > 10) {
+        toast(`Resumed at ${formatTime(resumeTime)}`);
       }
 
     } catch (err) {

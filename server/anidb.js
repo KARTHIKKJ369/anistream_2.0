@@ -31,35 +31,39 @@ function findCurl() {
 const path = require('path');
 
 /**
- * Executes curl with TLS ciphers, with Python curl_cffi fallback to connect to anidb.app endpoints.
+ * Executes Python curl_cffi (Chrome 124 impersonation) for instant Cloudflare bypass,
+ * with fallback to curl with custom TLS ciphers.
  */
 function anidbFetch(url, timeoutSec = 15) {
-  return findCurl().then(curlExe => new Promise((resolve, reject) => {
-    const args = [
-      '-sL',
-      '-A', AGENT,
-      '--ciphers', CIPHERS,
-      '--tls13-ciphers', TLS13_CIPHERS,
-      '--max-time', String(timeoutSec),
-      url
-    ];
+  const pyScript = path.join(__dirname, 'cf_fetch.py');
 
-    execFile(curlExe, args, { maxBuffer: 25 * 1024 * 1024 }, (err, stdout) => {
-      const isBlocked = err || (/just a moment/i.test(stdout) && stdout.length < 8000) || !stdout;
-      if (!isBlocked) {
-        return resolve(stdout);
+  return new Promise((resolve, reject) => {
+    // 1. Try Python curl_cffi directly (bypasses Cloudflare on datacenter IPs)
+    execFile('python3', [pyScript, url, String(timeoutSec)], { maxBuffer: 25 * 1024 * 1024 }, (pyErr, pyStdout) => {
+      if (!pyErr && pyStdout && !pyStdout.includes('Just a moment')) {
+        return resolve(pyStdout);
       }
 
-      // Try Python curl_cffi fallback if curl was blocked by Cloudflare
-      const pyScript = path.join(__dirname, 'cf_fetch.py');
-      execFile('python3', [pyScript, url, String(timeoutSec)], { maxBuffer: 25 * 1024 * 1024 }, (pyErr, pyStdout) => {
-        if (!pyErr && pyStdout && !pyStdout.includes('Just a moment')) {
-          return resolve(pyStdout);
-        }
-        reject(new Error('Blocked by Cloudflare challenge.'));
-      });
+      // 2. Fallback to TLS-ciphers curl if python3 is unavailable
+      findCurl().then(curlExe => {
+        const args = [
+          '-sL',
+          '-A', AGENT,
+          '--ciphers', CIPHERS,
+          '--tls13-ciphers', TLS13_CIPHERS,
+          '--max-time', String(timeoutSec),
+          url
+        ];
+
+        execFile(curlExe, args, { maxBuffer: 25 * 1024 * 1024 }, (err, stdout) => {
+          if (!err && stdout && !/just a moment/i.test(stdout)) {
+            return resolve(stdout);
+          }
+          reject(new Error('Blocked by Cloudflare challenge.'));
+        });
+      }).catch(reject);
     });
-  }));
+  });
 }
 
 // ─── ANILIST METADATA & BOUNDED LRU CACHE ──────────────────────────────

@@ -40,8 +40,18 @@ fi
 # Ensure Python curl-cffi is available for Cloudflare bypass on datacenter IPs
 if command -v python3 >/dev/null 2>&1; then
   if ! python3 -c "import curl_cffi" >/dev/null 2>&1; then
-    echo "  🔧 Installing curl-cffi for Cloudflare bypass..."
-    pip3 install --user --break-system-packages curl-cffi >/dev/null 2>&1 || pip install --user curl-cffi >/dev/null 2>&1 || true
+    echo "  🔧 Setting up curl-cffi Cloudflare bypass engine..."
+    if ! command -v pip3 >/dev/null 2>&1 && ! command -v pip >/dev/null 2>&1; then
+      if command -v sudo >/dev/null 2>&1; then
+        sudo apt-get update -qq && sudo apt-get install -y -qq python3-pip >/dev/null 2>&1 || true
+      fi
+    fi
+    pip3 install --user --break-system-packages curl-cffi >/dev/null 2>&1 || pip3 install --user curl-cffi >/dev/null 2>&1 || pip install --user curl-cffi >/dev/null 2>&1 || true
+  fi
+  if python3 -c "import curl_cffi" >/dev/null 2>&1; then
+    echo "  🛡️ Cloudflare bypass engine: Active (curl-cffi Chrome 124)"
+  else
+    echo "  ⚠️ Cloudflare bypass warning: Run 'sudo apt install python3-pip && pip3 install curl-cffi' if video streams get blocked."
   fi
 fi
 
