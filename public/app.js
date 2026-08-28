@@ -271,7 +271,8 @@ const App = (() => {
       card.onclick = () => navigateTo(`#/anime/${encodeURIComponent(entry.animeId)}`);
 
       const featuredMatch = state.featuredData.find(f => f.id === entry.animeId);
-      const thumb = entry.banner || entry.cover || featuredMatch?.banner || featuredMatch?.cover || DARK_POSTER_PLACEHOLDER;
+      const featuredThumb = featuredMatch ? (featuredMatch.banner || featuredMatch.cover) : null;
+      const thumb = entry.banner || entry.cover || featuredThumb || DARK_POSTER_PLACEHOLDER;
       const progressPercent = entry.progressPercent || (entry.duration > 0 ? Math.round((entry.currentTime / entry.duration) * 100) : 0);
 
       card.innerHTML = `
@@ -716,7 +717,7 @@ const App = (() => {
       let resumeTime = 0;
       try {
         const progRes = await api(`/api/progress/${encodeURIComponent(state.currentAnimeId)}`);
-        if (progRes?.progress && progRes.progress.episodeNumber === ep.episodeNumber && progRes.progress.currentTime > 10) {
+        if (progRes && progRes.progress && progRes.progress.episodeNumber === ep.episodeNumber && progRes.progress.currentTime > 10) {
           resumeTime = progRes.progress.currentTime;
         }
       } catch (_) {}

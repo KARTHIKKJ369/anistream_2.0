@@ -150,6 +150,7 @@ function updateHistory(episodeNumber, animeId, animeTitle, cover = '', banner = 
   const progressMap = readProgressMap();
   const percent = duration > 0 ? Math.min(100, Math.round((currentTime / duration) * 100)) : 0;
 
+  const existingProg = progressMap[safeId] || {};
   progressMap[safeId] = {
     animeId: safeId,
     animeTitle: safeTitle,
@@ -157,8 +158,8 @@ function updateHistory(episodeNumber, animeId, animeTitle, cover = '', banner = 
     currentTime: Number(currentTime) || 0,
     duration: Number(duration) || 0,
     progressPercent: percent,
-    cover: cover || progressMap[safeId]?.cover || null,
-    banner: banner || progressMap[safeId]?.banner || null,
+    cover: cover || existingProg.cover || null,
+    banner: banner || existingProg.banner || null,
     updatedAt: Date.now(),
   };
 

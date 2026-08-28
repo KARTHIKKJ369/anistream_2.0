@@ -142,38 +142,54 @@ async function queryAniList(searchTerm) {
 
     if (!response.ok) return null;
     const json = await response.json();
-    const d = json?.data?.Media;
+    const d = json && json.data && json.data.Media;
     if (!d) return null;
+
+    const bannerImg = d.bannerImage || (d.coverImage && (d.coverImage.extraLarge || d.coverImage.large)) || null;
+    const coverImg = (d.coverImage && (d.coverImage.extraLarge || d.coverImage.large || d.coverImage.medium)) || null;
+    const studioName = (d.studios && d.studios.nodes && d.studios.nodes[0] && d.studios.nodes[0].name) || 'Animation Studio';
+
+    const charList = (d.characters && d.characters.edges) ? d.characters.edges.map(e => {
+      const node = e.node || {};
+      const img = node.image && (node.image.large || node.image.medium);
+      return {
+        name: (node.name && node.name.full) || 'Character',
+        role: e.role || 'SUPPORTING',
+        image: img || null,
+      };
+    }) : [];
+
+    const recList = (d.recommendations && d.recommendations.nodes) ? d.recommendations.nodes
+      .map(r => r.mediaRecommendation)
+      .filter(Boolean)
+      .map(rec => {
+        const recTitle = (rec.title && (rec.title.english || rec.title.romaji)) || 'Anime';
+        const recCover = rec.coverImage && rec.coverImage.large;
+        return {
+          id: recTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          title: recTitle,
+          cover: recCover || null,
+          score: rec.averageScore ? (rec.averageScore / 10).toFixed(1) : null,
+          format: rec.format || 'TV',
+        };
+      }) : [];
 
     return {
       id: String(d.id),
-      matchedTitle: d.title.english || d.title.romaji || searchTerm,
-      bannerImage: d.bannerImage || d.coverImage?.extraLarge || d.coverImage?.large || null,
-      coverImage: d.coverImage?.extraLarge || d.coverImage?.large || d.coverImage?.medium || null,
+      matchedTitle: (d.title && (d.title.english || d.title.romaji)) || searchTerm,
+      bannerImage: bannerImg,
+      coverImage: coverImg,
       description: d.description ? d.description.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim() : '',
       episodesCount: d.episodes || null,
       genres: d.genres || ['Action', 'Fantasy'],
       score: d.averageScore ? (d.averageScore / 10).toFixed(1) : '8.3',
-      studio: d.studios?.nodes?.[0]?.name || 'Animation Studio',
+      studio: studioName,
       format: d.format || 'TV Series',
       status: d.status || 'FINISHED',
       year: d.seasonYear || 2024,
       duration: d.duration ? `${d.duration}m` : '24m',
-      characters: (d.characters?.edges || []).map(e => ({
-        name: e.node?.name?.full || 'Character',
-        role: e.role || 'SUPPORTING',
-        image: e.node?.image?.large || e.node?.image?.medium || null,
-      })),
-      recommendations: (d.recommendations?.nodes || [])
-        .map(r => r.mediaRecommendation)
-        .filter(Boolean)
-        .map(rec => ({
-          id: (rec.title?.english || rec.title?.romaji || 'anime').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-          title: rec.title?.english || rec.title?.romaji || 'Anime',
-          cover: rec.coverImage?.large || null,
-          score: rec.averageScore ? (rec.averageScore / 10).toFixed(1) : null,
-          format: rec.format || 'TV',
-        })),
+      characters: charList,
+      recommendations: recList,
     };
   } catch (err) {
     return null;
@@ -268,16 +284,18 @@ async function searchAniList(query) {
     });
     if (!res.ok) return [];
     const data = await res.json();
-    const list = data?.data?.Page?.media || [];
+    const list = (data && data.data && data.data.Page && data.data.Page.media) || [];
 
     return list.map(m => {
-      const title = m.title.english || m.title.romaji || 'Anime';
+      const title = (m.title && (m.title.english || m.title.romaji)) || 'Anime';
       const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const coverImg = (m.coverImage && (m.coverImage.large || m.coverImage.medium)) || null;
+      const bannerImg = m.bannerImage || (m.coverImage && m.coverImage.large) || null;
       return {
         id: slug,
         title,
-        img: m.coverImage?.large || m.coverImage?.medium || null,
-        banner: m.bannerImage || m.coverImage?.large || null,
+        img: coverImg,
+        banner: bannerImg,
         score: m.averageScore ? (m.averageScore / 10).toFixed(1) : null,
         year: m.seasonYear || 2024,
         format: m.format || 'TV',
@@ -367,6 +385,7 @@ async function getAnimeDesc(animeId) {
 
   // Fetch AniList metadata
   const meta = await smartFetchMetadata(resolvedId, rawTitle);
+  const hasMeta = !!meta;
 
   let pageDesc = '';
   let pageImg = null;
@@ -393,20 +412,20 @@ async function getAnimeDesc(animeId) {
   }
 
   return {
-    animeTitle: meta?.matchedTitle || rawTitle,
-    description: meta?.description || pageDesc.trim() || 'No overview available for this series.',
+    animeTitle: (hasMeta && meta.matchedTitle) || rawTitle,
+    description: (hasMeta && meta.description) || pageDesc.trim() || 'No overview available for this series.',
     seasons,
-    thumbnail: meta?.coverImage || pageImg,
-    bannerImage: meta?.bannerImage || meta?.coverImage || pageImg,
-    score: meta?.score || '8.4',
-    genres: meta?.genres || ['Action', 'Fantasy'],
-    studio: meta?.studio || 'Animation Studio',
-    format: meta?.format || 'TV Series',
-    year: meta?.year || '2024',
-    duration: meta?.duration || '24m',
-    status: meta?.status || 'FINISHED',
-    characters: meta?.characters || [],
-    recommendations: meta?.recommendations || [],
+    thumbnail: (hasMeta && meta.coverImage) || pageImg,
+    bannerImage: (hasMeta && (meta.bannerImage || meta.coverImage)) || pageImg,
+    score: (hasMeta && meta.score) || '8.4',
+    genres: (hasMeta && meta.genres) || ['Action', 'Fantasy'],
+    studio: (hasMeta && meta.studio) || 'Animation Studio',
+    format: (hasMeta && meta.format) || 'TV Series',
+    year: (hasMeta && meta.year) || '2024',
+    duration: (hasMeta && meta.duration) || '24m',
+    status: (hasMeta && meta.status) || 'FINISHED',
+    characters: (hasMeta && meta.characters) || [],
+    recommendations: (hasMeta && meta.recommendations) || [],
   };
 }
 

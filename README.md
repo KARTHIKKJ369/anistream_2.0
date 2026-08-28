@@ -48,6 +48,19 @@
 
 ## 🚀 Quick Start
 
+### 📋 Prerequisites & Installation (Linux / Ubuntu / macOS)
+
+If running on a fresh Linux / Ubuntu VM (e.g. Azure / AWS / DigitalOcean):
+
+```bash
+# 1. Install Node.js (v20+ recommended)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# 2. Install dependencies
+npm install
+```
+
 ### 1. Launch in Background (Daemon Mode)
 
 ```bash

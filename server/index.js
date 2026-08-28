@@ -52,17 +52,18 @@ app.get('/api/featured', async (req, res) => {
   try {
     const list = await Promise.all(FEATURED_ITEMS.map(async item => {
       const meta = await smartFetchMetadata(item.id, item.search);
+      const hasMeta = !!meta;
       return {
         id: item.id,
-        title: meta?.matchedTitle || item.title,
-        cover: meta?.coverImage || null,
-        banner: meta?.bannerImage || meta?.coverImage || null,
-        score: meta?.score || '8.5',
-        year: meta?.year || '2024',
-        format: meta?.format || 'TV',
-        description: meta?.description || '',
-        genres: meta?.genres || ['Action', 'Fantasy'],
-        duration: meta?.duration || '24m',
+        title: (hasMeta && meta.matchedTitle) || item.title,
+        cover: (hasMeta && meta.coverImage) || null,
+        banner: (hasMeta && (meta.bannerImage || meta.coverImage)) || null,
+        score: (hasMeta && meta.score) || '8.5',
+        year: (hasMeta && meta.year) || '2024',
+        format: (hasMeta && meta.format) || 'TV',
+        description: (hasMeta && meta.description) || '',
+        genres: (hasMeta && meta.genres) || ['Action', 'Fantasy'],
+        duration: (hasMeta && meta.duration) || '24m',
       };
     }));
     res.json({ featured: list });
@@ -153,9 +154,10 @@ app.get('/api/history', async (req, res) => {
     const enriched = [];
     for (const entry of rawHistory) {
       const meta = await smartFetchMetadata(entry.animeId, entry.animeTitle);
-      const cover = entry.cover || meta?.coverImage || null;
-      const banner = entry.banner || meta?.bannerImage || meta?.coverImage || null;
-      const animeTitle = meta?.matchedTitle || entry.animeTitle.replace(/\s*\(\s*\d+\s*episodes?\s*\)/gi, '').trim();
+      const hasMeta = !!meta;
+      const cover = entry.cover || (hasMeta && meta.coverImage) || null;
+      const banner = entry.banner || (hasMeta && (meta.bannerImage || meta.coverImage)) || null;
+      const animeTitle = (hasMeta && meta.matchedTitle) || entry.animeTitle.replace(/\s*\(\s*\d+\s*episodes?\s*\)/gi, '').trim();
 
       enriched.push({
         ...entry,

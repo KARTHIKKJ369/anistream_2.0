@@ -14,12 +14,27 @@ echo "  🎌 AniStream 2.0 — Otaku Cinema Anime Streaming"
 echo "  Powered by ani-cli & AniList"
 echo ""
 
-# Install dependencies if needed
-if [ ! -d "node_modules" ]; then
-  echo "  📦 Installing dependencies..."
-  npm install --silent
-  echo "  ✅ Dependencies installed"
+# Check for node
+if ! command -v node >/dev/null 2>&1; then
+  echo "  ❌ Node.js is not installed."
+  echo "  💡 Install Node.js (Ubuntu/Debian):"
+  echo "     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -"
+  echo "     sudo apt-get install -y nodejs"
   echo ""
+  exit 1
+fi
+
+# Install dependencies if node_modules is missing
+if [ ! -d "node_modules" ]; then
+  if command -v npm >/dev/null 2>&1; then
+    echo "  📦 Installing dependencies via npm..."
+    npm install --silent
+    echo "  ✅ Dependencies installed"
+    echo ""
+  else
+    echo "  ⚠️ npm command not found. Please install npm (e.g. sudo apt install npm or install Node.js via nodesource)."
+    echo ""
+  fi
 fi
 
 # Stop any running instance on this port
