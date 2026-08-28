@@ -551,7 +551,32 @@ const App = (() => {
       renderCastSection(data.characters || []);
       renderRecommendationsSection(data.recommendations || []);
 
-      state.currentEpisodes = epVal.episodes || data.episodes || [];
+      let episodes = (epVal && epVal.episodes) || data.episodes || [];
+
+      // If backend returned synthetic episodes or no episodes, try resolving directly via client browser
+      const isSynthetic = !episodes.length || episodes.some(e => String(e.episodeId).includes('-ep-'));
+      if (isSynthetic) {
+        const numMatch = String(state.currentAnimeId).match(/-(\d+)$/);
+        const numericId = numMatch ? numMatch[1] : (data.anidbId || null);
+        if (numericId) {
+          try {
+            const clientRes = await fetch(`https://anidb.app/api/frontend/anime/${numericId}/episodes`);
+            if (clientRes.ok) {
+              const clientData = await clientRes.json();
+              if (clientData && Array.isArray(clientData.episodes) && clientData.episodes.length > 0) {
+                episodes = clientData.episodes.map(ep => ({
+                  episodeId: String(ep.id),
+                  episodeNumber: ep.number,
+                  title: `Episode ${ep.number}`,
+                  filler: Boolean(ep.filler)
+                }));
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      state.currentEpisodes = episodes;
       state.filteredEpisodes = state.currentEpisodes;
       renderEpisodeList();
 
@@ -783,10 +808,42 @@ const App = (() => {
     destroyHls();
 
     try {
-      const streamEndpoint = `/api/stream/${encodeURIComponent(ep.episodeId)}?lang=${state.currentLang}&animeId=${encodeURIComponent(state.currentAnimeId || '')}&ep=${ep.episodeNumber}`;
-      const data = await api(streamEndpoint);
-      state.streamLinks = data.links || [];
-      state.embedUrl = data.embedUrl || null;
+      let streamData = null;
+      try {
+        const streamEndpoint = `/api/stream/${encodeURIComponent(ep.episodeId)}?lang=${state.currentLang}&animeId=${encodeURIComponent(state.currentAnimeId || '')}&ep=${ep.episodeNumber}`;
+        streamData = await api(streamEndpoint);
+      } catch (srvErr) {
+        console.warn('[Server stream notice]:', srvErr.message);
+      }
+
+      // If server returned no links/embed, fallback to client-direct AniDB language fetch
+      if (!streamData || (!streamData.links.length && !streamData.embedUrl)) {
+        if (/^\d+$/.test(String(ep.episodeId))) {
+          try {
+            const directLangRes = await fetch(`https://anidb.app/api/frontend/episode/${ep.episodeId}/languages`);
+            if (directLangRes.ok) {
+              const langJson = await directLangRes.json();
+              const langCode = state.currentLang === 'dub' ? 'eng' : 'jpn';
+              const languages = Array.isArray(langJson) ? langJson : (langJson.languages || []);
+              const match = languages.find(l => l && l.code === langCode) || languages[0];
+              if (match && match.embed_url) {
+                streamData = {
+                  links: [],
+                  embedUrl: match.embed_url,
+                  streamType: 'embed'
+                };
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (!streamData || (!streamData.links.length && !streamData.embedUrl)) {
+        streamData = { links: [], embedUrl: `https://anidb.app/embed/${ep.episodeId}` };
+      }
+
+      state.streamLinks = streamData.links || [];
+      state.embedUrl = streamData.embedUrl || null;
 
       // Mode A: Native Direct HLS Video Player
       if (state.streamLinks.length > 0) {
