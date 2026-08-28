@@ -28,8 +28,10 @@ function findCurl() {
   return Promise.reject(new Error('curl not found'));
 }
 
+const path = require('path');
+
 /**
- * Executes curl with TLS ciphers to connect to anidb.app endpoints.
+ * Executes curl with TLS ciphers, with Python curl_cffi fallback to connect to anidb.app endpoints.
  */
 function anidbFetch(url, timeoutSec = 15) {
   return findCurl().then(curlExe => new Promise((resolve, reject) => {
@@ -43,11 +45,19 @@ function anidbFetch(url, timeoutSec = 15) {
     ];
 
     execFile(curlExe, args, { maxBuffer: 25 * 1024 * 1024 }, (err, stdout) => {
-      if (err) return reject(new Error(`Fetch error for ${url}: ${err.message}`));
-      if (/just a moment/i.test(stdout) && stdout.length < 8000) {
-        return reject(new Error('Blocked by Cloudflare challenge.'));
+      const isBlocked = err || (/just a moment/i.test(stdout) && stdout.length < 8000) || !stdout;
+      if (!isBlocked) {
+        return resolve(stdout);
       }
-      resolve(stdout);
+
+      // Try Python curl_cffi fallback if curl was blocked by Cloudflare
+      const pyScript = path.join(__dirname, 'cf_fetch.py');
+      execFile('python3', [pyScript, url, String(timeoutSec)], { maxBuffer: 25 * 1024 * 1024 }, (pyErr, pyStdout) => {
+        if (!pyErr && pyStdout && !pyStdout.includes('Just a moment')) {
+          return resolve(pyStdout);
+        }
+        reject(new Error('Blocked by Cloudflare challenge.'));
+      });
     });
   }));
 }
@@ -436,50 +446,68 @@ async function getEpisodes(animeId) {
   const numericId = resolvedId.replace(/^.*-/, '');
 
   if (!numericId || isNaN(numericId)) {
-    // Return placeholder episodes if ID not numeric
-    return Array.from({ length: 12 }, (_, i) => ({
-      episodeId: `${resolvedId}-ep-${i + 1}`,
-      episodeNumber: i + 1,
-      title: `Episode ${i + 1}`,
-      filler: false,
-    }));
+    return generateFallbackEpisodes(resolvedId);
   }
 
   const url = `${BASE_API}/api/frontend/anime/${numericId}/episodes`;
-  const text = await anidbFetch(url, 15);
-
-  const episodes = [];
   try {
-    const parsed = JSON.parse(text);
-    const rawList = Array.isArray(parsed) ? parsed : (parsed.episodes || []);
-    for (const item of rawList) {
-      if (item && item.id !== undefined && item.number !== undefined) {
-        episodes.push({
-          episodeId: String(item.id),
-          episodeNumber: parseInt(item.number, 10),
-          title: item.title || `Episode ${item.number}`,
-          filler: !!item.filler,
-        });
+    const text = await anidbFetch(url, 15);
+    const episodes = [];
+    try {
+      const parsed = JSON.parse(text);
+      const rawList = Array.isArray(parsed) ? parsed : (parsed.episodes || []);
+      for (const item of rawList) {
+        if (item && item.id !== undefined && item.number !== undefined) {
+          episodes.push({
+            episodeId: String(item.id),
+            episodeNumber: parseInt(item.number, 10),
+            title: item.title || `Episode ${item.number}`,
+            filler: !!item.filler,
+          });
+        }
       }
+    } catch (err) {
+      const entries = text.split('},{');
+      for (const entry of entries) {
+        const idMatch = entry.match(/"id":(\d+)/);
+        const numMatch = entry.match(/"number":(\d+)/);
+        if (idMatch && numMatch) {
+          episodes.push({
+            episodeId: idMatch[1],
+            episodeNumber: parseInt(numMatch[1], 10),
+            title: `Episode ${numMatch[1]}`,
+            filler: false,
+          });
+        }
+      }
+    }
+
+    if (episodes.length > 0) {
+      episodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
+      return episodes;
     }
   } catch (err) {
-    const entries = text.split('},{');
-    for (const entry of entries) {
-      const idMatch = entry.match(/"id":(\d+)/);
-      const numMatch = entry.match(/"number":(\d+)/);
-      if (idMatch && numMatch) {
-        episodes.push({
-          episodeId: idMatch[1],
-          episodeNumber: parseInt(numMatch[1], 10),
-          title: `Episode ${numMatch[1]}`,
-          filler: false,
-        });
-      }
-    }
+    console.warn(`[getEpisodes fallback for ${resolvedId}]:`, err.message);
   }
 
-  episodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
-  return episodes;
+  return generateFallbackEpisodes(resolvedId);
+}
+
+async function generateFallbackEpisodes(resolvedId) {
+  let count = 12;
+  try {
+    const meta = await smartFetchMetadata(resolvedId);
+    if (meta && meta.episodesCount && meta.episodesCount > 0) {
+      count = meta.episodesCount;
+    }
+  } catch (_) {}
+
+  return Array.from({ length: count }, (_, i) => ({
+    episodeId: `${resolvedId}-ep-${i + 1}`,
+    episodeNumber: i + 1,
+    title: `Episode ${i + 1}`,
+    filler: false,
+  }));
 }
 
 async function getStreamLinks(episodeId, lang = 'sub') {

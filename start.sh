@@ -37,6 +37,14 @@ if [ ! -d "node_modules" ]; then
   fi
 fi
 
+# Ensure Python curl-cffi is available for Cloudflare bypass on datacenter IPs
+if command -v python3 >/dev/null 2>&1; then
+  if ! python3 -c "import curl_cffi" >/dev/null 2>&1; then
+    echo "  🔧 Installing curl-cffi for Cloudflare bypass..."
+    pip3 install --user --break-system-packages curl-cffi >/dev/null 2>&1 || pip install --user curl-cffi >/dev/null 2>&1 || true
+  fi
+fi
+
 # Stop any running instance on this port
 EXISTING_PID=$(lsof -ti:$PORT 2>/dev/null || true)
 if [ -n "$EXISTING_PID" ]; then

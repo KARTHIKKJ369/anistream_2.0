@@ -512,9 +512,17 @@ const App = (() => {
     $('episode-list').innerHTML = `<p style="color:var(--color-text-muted); padding:20px;">Fetching episode list...</p>`;
 
     try {
-      const data = await api(`/api/anime/${encodeURIComponent(animeId)}`);
-      state.currentAnimeId = data.animeId || animeId;
-      state.currentAnimeTitle = data.animeTitle || animeId;
+      const results = await Promise.allSettled([
+        api(`/api/anime/${encodeURIComponent(animeId)}`),
+        api(`/api/episodes/${encodeURIComponent(animeId)}`)
+      ]);
+
+      const detailVal = (results[0].status === 'fulfilled' && results[0].value) || {};
+      const data = detailVal.detail || detailVal;
+      const epVal = (results[1].status === 'fulfilled' && results[1].value) || {};
+
+      state.currentAnimeId = epVal.animeId || animeId;
+      state.currentAnimeTitle = data.animeTitle || animeId.replace(/-[0-9]+$/, '').replace(/-/g, ' ');
 
       $('detail-title').textContent = state.currentAnimeTitle;
 
@@ -527,7 +535,7 @@ const App = (() => {
       if (posterUrl) $('detail-poster-img').src = posterUrl;
 
       $('detail-score').textContent = `★ ${data.score || '8.4'}`;
-      $('detail-year').textContent = data.year || '2025';
+      $('detail-year').textContent = data.year || '2024';
       $('detail-format').textContent = data.format || 'TV Series';
       $('detail-studio').textContent = data.studio || 'Animation Studio';
       $('detail-duration').textContent = data.duration || '24m per ep';
@@ -543,7 +551,7 @@ const App = (() => {
       renderCastSection(data.characters || []);
       renderRecommendationsSection(data.recommendations || []);
 
-      state.currentEpisodes = data.episodes || [];
+      state.currentEpisodes = epVal.episodes || data.episodes || [];
       state.filteredEpisodes = state.currentEpisodes;
       renderEpisodeList();
 
@@ -558,7 +566,7 @@ const App = (() => {
       };
 
     } catch (err) {
-      toast(`Error loading series: ${err.message}`);
+      console.error('Error loading anime detail:', err);
     }
   }
 
