@@ -290,7 +290,6 @@ app.get('/proxy/stream', async (req, res) => {
 
       const curlArgs = [
         '-sL',
-        '--compressed',
         '-A', AGENT,
         '--ciphers', CIPHERS,
         '--tls13-ciphers', TLS13_CIPHERS,

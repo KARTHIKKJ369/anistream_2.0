@@ -868,16 +868,18 @@ const App = (() => {
     loading.classList.remove('hidden');
     error.classList.add('hidden');
 
-    const proxiedUrl = `/proxy/stream?url=${encodeURIComponent(streamUrl)}`;
     destroyHls();
 
     video.onplaying = () => loading.classList.add('hidden');
     video.onwaiting = () => loading.classList.remove('hidden');
     video.onerror = () => {
       loading.classList.add('hidden');
-      error.classList.remove('hidden');
+      error.classList.add('hidden');
       $('video-error-text').textContent = 'Playback error occurred. Click Try Again.';
     };
+
+    // Prefer direct stream URL (CORS enabled on hls.anidb.app) with proxy fallback
+    const targetSource = streamUrl.startsWith('http') ? streamUrl : `/proxy/stream?url=${encodeURIComponent(streamUrl)}`;
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -893,7 +895,7 @@ const App = (() => {
       });
       state.hlsInstance = hls;
 
-      hls.loadSource(proxiedUrl);
+      hls.loadSource(targetSource);
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -905,9 +907,18 @@ const App = (() => {
         loading.classList.add('hidden');
       });
 
+      let fallbackTried = false;
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
           console.error('[HLS fatal error]', data.type, data.details);
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !fallbackTried && targetSource === streamUrl) {
+            fallbackTried = true;
+            console.log('[HLS fallback] Routing via stream proxy...');
+            hls.loadSource(`/proxy/stream?url=${encodeURIComponent(streamUrl)}`);
+            hls.startLoad();
+            return;
+          }
+
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               hls.startLoad();
