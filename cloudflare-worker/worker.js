@@ -32,22 +32,38 @@ const POPULAR_SLUG_MAP = {
   '1p': 'one-piece-3880',
   'solo-leveling': 'solo-leveling-4883',
   'solo-leveling-season-2': 'solo-leveling-season-2-arise-from-the-shadow-4884',
-  'attack-on-titan': 'shingeki-no-kyojin-4739',
-  'shingeki-no-kyojin': 'shingeki-no-kyojin-4739',
+  'solo-leveling-season-2-arise-from-the-shadow': 'solo-leveling-season-2-arise-from-the-shadow-4884',
+  'attack-on-titan': 'attack-on-titan-457',
+  'shingeki-no-kyojin': 'attack-on-titan-457',
+  'attack-on-titan-season-2': 'attack-on-titan-season-2-459',
+  'attack-on-titan-season-3': 'attack-on-titan-season-3-460',
+  'attack-on-titan-season-3-part-2': 'attack-on-titan-season-3-part-2-461',
+  'attack-on-titan-final-season': 'attack-on-titan-final-season-464',
+  'attack-on-titan-final-season-part-2': 'attack-on-titan-final-season-part-2-466',
   'jujutsu-kaisen': 'jujutsu-kaisen-2552',
+  'jujutsu-kaisen-season-2': 'jujutsu-kaisen-season-2-2554',
   'chainsaw-man': 'chainsaw-man-922',
-  'demon-slayer': 'kimetsu-no-yaiba-1217',
-  'kimetsu-no-yaiba': 'kimetsu-no-yaiba-1217',
-  'naruto': 'naruto-3610',
-  'naruto-shippuden': 'naruto-shippuuden-3613',
-  'bleach': 'bleach-689',
-  'dragon-ball-z': 'dragon-ball-z-1419',
-  'dragon-ball-super': 'dragon-ball-super-1418',
-  'my-hero-academia': 'boku-no-hero-academia-747',
-  'boku-no-hero-academia': 'boku-no-hero-academia-747',
-  'hunter-x-hunter': 'hunter-x-hunter-2011-2184',
-  'black-clover': 'black-clover-667',
-  'detective-conan': 'detective-conan-1250',
+  'demon-slayer': 'demon-slayer-kimetsu-no-yaiba-1217',
+  'demon-slayer-kimetsu-no-yaiba': 'demon-slayer-kimetsu-no-yaiba-1217',
+  'kimetsu-no-yaiba': 'demon-slayer-kimetsu-no-yaiba-1217',
+  'naruto': 'naruto-3686',
+  'naruto-shippuden': 'naruto-shippuden-3687',
+  'naruto-shippuuden': 'naruto-shippuden-3687',
+  'bleach': 'bleach-670',
+  'bleach-thousand-year-blood-war': 'bleach-thousand-year-blood-war-675',
+  'dragon-ball-z': 'dragon-ball-z-1343',
+  'dragon-ball-super': 'dragon-ball-super-1340',
+  'my-hero-academia': 'my-hero-academia-3592',
+  'boku-no-hero-academia': 'my-hero-academia-3592',
+  'hunter-x-hunter': 'hunter-x-hunter-2293',
+  'hunter-x-hunter-2011': 'hunter-x-hunter-2293',
+  'black-clover': 'black-clover-641',
+  'detective-conan': 'detective-conan-1230',
+  'death-note': 'death-note-1199',
+  'fullmetal-alchemist-brotherhood': 'fullmetal-alchemist-brotherhood-1690',
+  'steins-gate': 'steinsgate-4980',
+  'frieren': 'frieren-beyond-journeys-end-1663',
+  'frieren-beyond-journey-s-end': 'frieren-beyond-journeys-end-1663',
 };
 
 const FEATURED_ITEMS = [
@@ -236,7 +252,85 @@ async function searchAniList(searchTerm) {
   }
 }
 
-function resolveAnidbId(queryOrId) {
+function cleanTitleString(str) {
+  if (!str) return '';
+  return str
+    .replace(/\s*\([^)]*\)/g, '')
+    .replace(/\s*\[[^\]]*\]/g, '')
+    .replace(/\s*\{[^}]*\}/g, '')
+    .replace(/\s*(?:season|part|cour|the final chapters|special|movie|tv)\s*\d*/gi, '')
+    .replace(/[^a-zA-Z0-9\s:;'-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function smartFetchMetadata(animeId, pageTitle) {
+  const attempts = [];
+  const cleanedPageTitle = cleanTitleString(pageTitle);
+  if (cleanedPageTitle) attempts.push(cleanedPageTitle);
+
+  const cleanFromId = cleanTitleString((animeId || '')
+    .replace(/-[0-9]+$/, '')
+    .replace(/-/g, ' '));
+
+  if (cleanFromId && cleanFromId !== cleanedPageTitle) attempts.push(cleanFromId);
+
+  const rawFromId = (animeId || '').replace(/-[0-9]+$/, '').replace(/-/g, ' ').trim();
+  if (rawFromId && !attempts.includes(rawFromId)) attempts.push(rawFromId);
+
+  const baseTitle = cleanedPageTitle || cleanFromId;
+  if (baseTitle) {
+    const words = baseTitle.split(' ');
+    if (words.length > 3) attempts.push(words.slice(0, 3).join(' '));
+    if (words.length > 2) attempts.push(words.slice(0, 2).join(' '));
+  }
+
+  const uniqueAttempts = [...new Set(attempts.filter(Boolean))];
+
+  for (const term of uniqueAttempts) {
+    const meta = await queryAniList(term);
+    if (meta) return meta;
+  }
+
+  // Kitsu Fallback
+  for (const term of uniqueAttempts) {
+    try {
+      const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(term)}&page[limit]=1`, {
+        headers: { 'Accept': 'application/vnd.api+json', 'User-Agent': AGENT }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const item = json && json.data && json.data[0];
+        if (item && item.attributes) {
+          const attr = item.attributes;
+          const coverImg = (attr.posterImage && (attr.posterImage.large || attr.posterImage.original || attr.posterImage.medium)) || null;
+          const bannerImg = (attr.coverImage && (attr.coverImage.large || attr.coverImage.original)) || coverImg;
+          return {
+            id: String(item.id),
+            matchedTitle: attr.canonicalTitle || (attr.titles && (attr.titles.en || attr.titles.en_jp)) || term,
+            bannerImage: bannerImg,
+            coverImage: coverImg,
+            description: attr.synopsis || '',
+            episodesCount: attr.episodeCount || 12,
+            genres: ['Action', 'Fantasy'],
+            score: attr.averageRating ? (parseFloat(attr.averageRating) / 10).toFixed(1) : '8.0',
+            studio: 'Animation Studio',
+            format: attr.subtype ? attr.subtype.toUpperCase() : 'TV',
+            status: attr.status ? attr.status.toUpperCase() : 'FINISHED',
+            year: attr.startDate ? parseInt(attr.startDate.slice(0, 4), 10) : 2024,
+            duration: attr.episodeLength ? `${attr.episodeLength}m` : '24m',
+            characters: [],
+            recommendations: [],
+          };
+        }
+      }
+    } catch (_) {}
+  }
+
+  return null;
+}
+
+async function resolveAnidbId(queryOrId) {
   if (!queryOrId) return queryOrId;
   const trimmed = queryOrId.trim().toLowerCase();
   if (/-\d+$/.test(trimmed)) return trimmed;
@@ -245,13 +339,28 @@ function resolveAnidbId(queryOrId) {
   if (POPULAR_SLUG_MAP[normalized]) {
     return POPULAR_SLUG_MAP[normalized];
   }
+
+  const clean = trimmed.replace(/-/g, ' ').trim();
+  try {
+    const browseRes = await fetch(`${ANIDB_BASE}/browse?q=${encodeURIComponent(clean)}`, {
+      headers: BROWSER_HEADERS
+    });
+    if (browseRes.ok) {
+      const html = await browseRes.text();
+      const match = html.match(/\/anime\/([a-z0-9][a-z0-9-]*-\d+)/i);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+  } catch (_) {}
+
   return queryOrId;
 }
 
 // ─── EPISODES & STREAMS ───────────────────────────────────────────────────
 
 async function getEpisodes(animeId) {
-  const resolvedId = resolveAnidbId(animeId);
+  const resolvedId = await resolveAnidbId(animeId);
   const numericId = resolvedId.replace(/^.*-/, '');
 
   if (numericId && !isNaN(numericId)) {
@@ -518,17 +627,17 @@ export default {
     const animeMatch = url.pathname.match(/^\/api\/anime\/([^\/]+)$/);
     if (animeMatch) {
       const rawId = animeMatch[1];
-      const animeId = resolveAnidbId(rawId);
-      const cleanTitle = animeId.replace(/-[0-9]+$/, '').replace(/-/g, ' ');
+      const animeId = await resolveAnidbId(rawId);
+      const rawTitle = animeId.replace(/-[0-9]+$/, '').replace(/-/g, ' ');
 
       const [meta, episodes] = await Promise.all([
-        queryAniList(cleanTitle),
+        smartFetchMetadata(animeId, rawTitle),
         getEpisodes(animeId)
       ]);
 
       return jsonRes({
         animeId,
-        animeTitle: (meta && meta.matchedTitle) || cleanTitle,
+        animeTitle: (meta && meta.matchedTitle) || rawTitle,
         description: (meta && meta.description) || 'No overview available.',
         seasons: [],
         thumbnail: (meta && meta.coverImage) || null,
