@@ -1,10 +1,11 @@
 /**
  * AniStream Cloudflare Worker — anidb.app Stream & API Proxy
  * 
- * Runs on Cloudflare Edge network to bypass datacenter IP blocks.
+ * Runs on Cloudflare Edge network to bypass datacenter IP blocks & enable global CORS.
  */
 
 const ANIDB_BASE = 'https://anidb.app';
+const HLS_BASE = 'https://hls.anidb.app';
 
 const BROWSER_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -24,7 +25,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // CORS preflight
+    // ── CORS preflight ──────────────────────────────────────────────────────
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
@@ -35,11 +36,66 @@ export default {
       });
     }
 
-    // Health check
+    // ── Health check ────────────────────────────────────────────────────────
     if (url.pathname === '/' || url.pathname === '/health') {
       return new Response(JSON.stringify({ status: 'ok', service: 'anistream-cf-proxy' }), {
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       });
+    }
+
+    // ── Dedicated CORS Stream Relay: /proxy-stream?url=... ──────────────────
+    if (url.pathname === '/proxy-stream') {
+      const targetUrl = url.searchParams.get('url');
+      if (!targetUrl) {
+        return new Response('Missing url param', { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
+      }
+
+      try {
+        const upstream = await fetch(targetUrl, {
+          headers: {
+            ...BROWSER_HEADERS,
+            'Referer': 'https://anidb.app/',
+            'Origin': 'https://anidb.app'
+          }
+        });
+
+        const isPlaylist = targetUrl.includes('.m3u8');
+        if (!isPlaylist) {
+          // Stream binary video/audio chunks (.ts / .mp4 / .m4s / .aac)
+          const responseHeaders = new Headers(upstream.headers);
+          responseHeaders.set('Access-Control-Allow-Origin', '*');
+          responseHeaders.set('Access-Control-Allow-Headers', '*');
+          responseHeaders.set('Cache-Control', 'public, max-age=86400');
+          return new Response(upstream.body, {
+            status: upstream.status,
+            headers: responseHeaders
+          });
+        }
+
+        // Playlist file: Rewrite all child URLs to route through /proxy-stream
+        const text = await upstream.text();
+        const base = targetUrl.replace(/\/[^/?#]+([?#].*)?$/, '/');
+        const workerOrigin = url.origin;
+
+        const rewritten = text.replace(/^(?!#)([^\r\n]+)/gm, (line) => {
+          const trimmed = line.trim();
+          if (!trimmed) return line;
+          const absolute = trimmed.startsWith('http') ? trimmed : new URL(trimmed, base).toString();
+          return `${workerOrigin}/proxy-stream?url=${encodeURIComponent(absolute)}`;
+        });
+
+        return new Response(rewritten, {
+          status: upstream.status,
+          headers: {
+            'Content-Type': 'application/vnd.apple.mpegurl',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': '*',
+            'Cache-Control': 'no-store'
+          }
+        });
+      } catch (err) {
+        return new Response(err.message, { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
+      }
     }
 
     // ── Dedicated Stream Resolver: /stream/:episodeId?lang=sub ──────────────
@@ -97,9 +153,10 @@ export default {
                   const qualUrl = trimmed.startsWith('http') 
                     ? trimmed 
                     : new URL(trimmed, masterUrl).toString();
+                  // Return CORS-enabled stream URL directly
                   links.push({
                     quality: currentRes || 'Auto',
-                    url: qualUrl
+                    url: `${url.origin}/proxy-stream?url=${encodeURIComponent(qualUrl)}`
                   });
                   currentRes = null;
                 }
@@ -108,7 +165,10 @@ export default {
           } catch (_) {}
 
           if (links.length === 0) {
-            links.push({ quality: '1080p', url: masterUrl });
+            links.push({
+              quality: '1080p',
+              url: `${url.origin}/proxy-stream?url=${encodeURIComponent(masterUrl)}`
+            });
           }
         }
 
@@ -135,7 +195,9 @@ export default {
     // ── Generic Passthrough: /proxy/* ───────────────────────────────────────
     if (url.pathname.startsWith('/proxy/')) {
       const anidbPath = url.pathname.replace(/^\/proxy/, '');
-      const targetUrl = `${ANIDB_BASE}${anidbPath}${url.search}`;
+      const isHls = anidbPath.startsWith('/stream/');
+      const targetBase = isHls ? HLS_BASE : ANIDB_BASE;
+      const targetUrl = `${targetBase}${anidbPath}${url.search}`;
 
       try {
         const upstream = await fetch(targetUrl, {

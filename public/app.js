@@ -898,15 +898,17 @@ const App = (() => {
     destroyHls();
 
     video.onplaying = () => loading.classList.add('hidden');
+    video.oncanplay = () => loading.classList.add('hidden');
+    video.onloadeddata = () => loading.classList.add('hidden');
+    video.onplay = () => loading.classList.add('hidden');
     video.onwaiting = () => loading.classList.remove('hidden');
     video.onerror = () => {
       loading.classList.add('hidden');
-      error.classList.add('hidden');
+      error.classList.remove('hidden');
       $('video-error-text').textContent = 'Playback error occurred. Click Try Again.';
     };
 
-    // Prefer direct stream URL (CORS enabled on hls.anidb.app) with proxy fallback
-    const targetSource = streamUrl.startsWith('http') ? streamUrl : `/proxy/stream?url=${encodeURIComponent(streamUrl)}`;
+    const targetSource = streamUrl;
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -926,26 +928,21 @@ const App = (() => {
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        loading.classList.add('hidden');
         if (seekTo > 0) video.currentTime = seekTo;
-        video.play().catch(e => console.warn('[autoplay notice]', e));
+        video.play().catch(e => {
+          console.warn('[autoplay notice]', e);
+          loading.classList.add('hidden');
+        });
       });
 
       hls.on(Hls.Events.FRAG_LOADED, () => {
         loading.classList.add('hidden');
       });
 
-      let fallbackTried = false;
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
           console.error('[HLS fatal error]', data.type, data.details);
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !fallbackTried && targetSource === streamUrl) {
-            fallbackTried = true;
-            console.log('[HLS fallback] Routing via stream proxy...');
-            hls.loadSource(`/proxy/stream?url=${encodeURIComponent(streamUrl)}`);
-            hls.startLoad();
-            return;
-          }
-
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               hls.startLoad();
@@ -963,10 +960,11 @@ const App = (() => {
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = proxiedUrl;
+      video.src = targetSource;
       video.addEventListener('loadedmetadata', () => {
+        loading.classList.add('hidden');
         if (seekTo > 0) video.currentTime = seekTo;
-        video.play().catch(() => {});
+        video.play().catch(() => loading.classList.add('hidden'));
       }, { once: true });
     } else {
       loading.classList.add('hidden');
