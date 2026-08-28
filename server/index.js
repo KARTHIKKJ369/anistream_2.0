@@ -33,7 +33,13 @@ const app = express();
 const PORT = process.env.PORT || 7474;
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
+}));
 
 // ─── FEATURED ITEMS ─────────────────────────────────────────────────────────
 
