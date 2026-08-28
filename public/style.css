@@ -1147,6 +1147,21 @@ body {
   outline: none;
 }
 
+.player-embed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #000;
+  z-index: 10;
+}
+
+.player-embed.hidden {
+  display: none !important;
+}
+
 .video-loading,
 .video-error {
   position: absolute;

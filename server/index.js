@@ -145,8 +145,8 @@ app.get('/api/stream/:episodeId', async (req, res) => {
   const { animeId, ep } = req.query;
   const lang = req.query.lang === 'dub' ? 'dub' : 'sub';
   try {
-    const links = await getStreamLinks(episodeId, lang, animeId, ep);
-    res.json({ links });
+    const result = await getStreamLinks(episodeId, lang, animeId, ep);
+    res.json(Array.isArray(result) ? { links: result } : result);
   } catch (err) {
     console.error('[stream error]', err.message);
     res.status(500).json({ error: err.message });

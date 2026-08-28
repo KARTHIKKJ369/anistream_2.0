@@ -786,35 +786,67 @@ const App = (() => {
       const streamEndpoint = `/api/stream/${encodeURIComponent(ep.episodeId)}?lang=${state.currentLang}&animeId=${encodeURIComponent(state.currentAnimeId || '')}&ep=${ep.episodeNumber}`;
       const data = await api(streamEndpoint);
       state.streamLinks = data.links || [];
+      state.embedUrl = data.embedUrl || null;
 
-      if (!state.streamLinks.length) throw new Error(`No stream available for Episode ${ep.episodeNumber} in ${state.currentLang.toUpperCase()}.`);
-
-      renderQualityPills();
-      const preferred = pickQuality(state.currentQuality);
-
-      // Fetch saved progress for resume
-      let resumeTime = 0;
-      try {
-        const progRes = await api(`/api/progress/${encodeURIComponent(state.currentAnimeId)}`);
-        if (progRes && progRes.progress && progRes.progress.episodeNumber === ep.episodeNumber && progRes.progress.currentTime > 10) {
-          resumeTime = progRes.progress.currentTime;
+      // Mode A: Native Direct HLS Video Player
+      if (state.streamLinks.length > 0) {
+        const embed = $('embed-player');
+        if (embed) {
+          embed.classList.add('hidden');
+          embed.src = 'about:blank';
         }
-      } catch (_) {}
+        $('video-player').classList.remove('hidden');
 
-      await loadStream(preferred.url, resumeTime);
+        renderQualityPills();
+        const preferred = pickQuality(state.currentQuality);
 
-      await saveProgress(
-        ep.episodeNumber,
-        state.currentAnimeId,
-        state.currentAnimeTitle,
-        state.currentCover || '',
-        state.currentBanner || '',
-        resumeTime,
-        0
-      );
+        let resumeTime = 0;
+        try {
+          const progRes = await api(`/api/progress/${encodeURIComponent(state.currentAnimeId)}`);
+          if (progRes && progRes.progress && progRes.progress.episodeNumber === ep.episodeNumber && progRes.progress.currentTime > 10) {
+            resumeTime = progRes.progress.currentTime;
+          }
+        } catch (_) {}
 
-      if (resumeTime > 10) {
-        toast(`Resumed at ${formatTime(resumeTime)}`);
+        await loadStream(preferred.url, resumeTime);
+
+        await saveProgress(
+          ep.episodeNumber,
+          state.currentAnimeId,
+          state.currentAnimeTitle,
+          state.currentCover || '',
+          state.currentBanner || '',
+          resumeTime,
+          0
+        );
+
+        if (resumeTime > 10) {
+          toast(`Resumed at ${formatTime(resumeTime)}`);
+        }
+      } else if (state.embedUrl) {
+        // Mode B: Seamless Cinema Embed Player (100% Cloudflare Bypass on hosted servers)
+        destroyHls();
+        $('video-player').classList.add('hidden');
+        const embed = $('embed-player');
+        if (embed) {
+          embed.classList.remove('hidden');
+          embed.src = state.embedUrl;
+        }
+        $('video-loading').classList.add('hidden');
+        $('video-error').classList.add('hidden');
+        $('quality-pills').innerHTML = '<span class="quality-pill active">Auto HD</span>';
+
+        await saveProgress(
+          ep.episodeNumber,
+          state.currentAnimeId,
+          state.currentAnimeTitle,
+          state.currentCover || '',
+          state.currentBanner || '',
+          0,
+          0
+        );
+      } else {
+        throw new Error(`No stream available for Episode ${ep.episodeNumber} in ${state.currentLang.toUpperCase()}.`);
       }
 
     } catch (err) {

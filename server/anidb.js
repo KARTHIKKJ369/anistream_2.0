@@ -536,72 +536,90 @@ async function getStreamLinks(episodeId, lang = 'sub', animeId = null, epNumber 
   }
 
   const langCode = lang === 'dub' ? 'eng' : 'jpn';
-  const url = `${BASE_API}/api/frontend/episode/${realEpId}/languages`;
-  const text = await anidbFetch(url, 15);
-
   let embedUrl = null;
+
   try {
-    const parsed = JSON.parse(text);
-    const languages = Array.isArray(parsed) ? parsed : (parsed.languages || []);
-    const match = languages.find(l => l && l.code === langCode);
-    if (match && match.embed_url) {
-      embedUrl = match.embed_url.replace(/\\/g, '');
-    } else if (languages.length > 0 && languages[0].embed_url) {
-      embedUrl = languages[0].embed_url.replace(/\\/g, '');
-    }
-  } catch (_) {
-    const entries = text.split('},{');
-    for (const entry of entries) {
-      if (entry.includes(`"${langCode}"`)) {
-        const embedMatch = entry.match(/"embed_url":"([^"]+)"/);
-        if (embedMatch) {
-          embedUrl = embedMatch[1].replace(/\\\//g, '/');
-          break;
+    const url = `${BASE_API}/api/frontend/episode/${realEpId}/languages`;
+    const text = await anidbFetch(url, 15);
+
+    try {
+      const parsed = JSON.parse(text);
+      const languages = Array.isArray(parsed) ? parsed : (parsed.languages || []);
+      const match = languages.find(l => l && l.code === langCode);
+      if (match && match.embed_url) {
+        embedUrl = match.embed_url.replace(/\\/g, '');
+      } else if (languages.length > 0 && languages[0].embed_url) {
+        embedUrl = languages[0].embed_url.replace(/\\/g, '');
+      }
+    } catch (_) {
+      const entries = text.split('},{');
+      for (const entry of entries) {
+        if (entry.includes(`"${langCode}"`)) {
+          const embedMatch = entry.match(/"embed_url":"([^"]+)"/);
+          if (embedMatch) {
+            embedUrl = embedMatch[1].replace(/\\\//g, '/');
+            break;
+          }
         }
       }
     }
+  } catch (langErr) {
+    console.warn(`[languages fetch warning on server]:`, langErr.message);
   }
 
   if (!embedUrl) {
-    throw new Error(`No ${lang.toUpperCase()} source found for episode ${episodeId}`);
+    embedUrl = `https://anidb.app/embed/${realEpId}`;
   }
 
-  const embedPage = await anidbFetch(embedUrl, 20);
-  const m3u8Match = embedPage.match(/file:\s*'([^']+\.m3u8[^']*)'/);
-  if (!m3u8Match) {
-    throw new Error('Could not extract stream URL from embed player page');
-  }
-  const masterM3u8 = m3u8Match[1];
+  // Try extracting direct HLS master m3u8 stream
+  try {
+    const embedPage = await anidbFetch(embedUrl, 15);
+    const m3u8Match = embedPage.match(/file:\s*'([^']+\.m3u8[^']*)'/);
+    if (m3u8Match) {
+      const masterM3u8 = m3u8Match[1];
+      const playlist = await anidbFetch(masterM3u8, 15);
+      const links = [];
 
-  const playlist = await anidbFetch(masterM3u8, 20);
-  const links = [];
-
-  const lines = playlist.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (line.startsWith('#EXT-X-STREAM-INF') && !line.includes('URI=')) {
-      const resMatch = line.match(/RESOLUTION=\d+x(\d+)/);
-      const quality = resMatch ? `${resMatch[1]}p` : 'unknown';
-      const nextLine = (lines[i + 1] || '').trim();
-      if (nextLine && !nextLine.startsWith('#')) {
-        const streamUrl = nextLine.startsWith('http')
-          ? nextLine
-          : masterM3u8.replace(/\/[^/]+$/, '/') + nextLine;
-        links.push({ quality, url: streamUrl });
+      const lines = playlist.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('#EXT-X-STREAM-INF') && !line.includes('URI=')) {
+          const resMatch = line.match(/RESOLUTION=\d+x(\d+)/);
+          const quality = resMatch ? `${resMatch[1]}p` : 'unknown';
+          const nextLine = (lines[i + 1] || '').trim();
+          if (nextLine && !nextLine.startsWith('#')) {
+            const streamUrl = nextLine.startsWith('http')
+              ? nextLine
+              : masterM3u8.replace(/\/[^/]+$/, '/') + nextLine;
+            links.push({ quality, url: streamUrl });
+          }
+        }
       }
+
+      links.sort((a, b) => (parseInt(b.quality, 10) || 0) - (parseInt(a.quality, 10) || 0));
+
+      const seen = new Set();
+      const unique = links.filter(l => {
+        if (seen.has(l.quality)) return false;
+        seen.add(l.quality);
+        return true;
+      });
+
+      if (unique.length > 0) {
+        return { links: unique, embedUrl, streamType: 'hls' };
+      }
+      return { links: [{ quality: 'best', url: masterM3u8 }], embedUrl, streamType: 'hls' };
     }
+  } catch (embedErr) {
+    console.warn(`[Direct HLS extraction bypassed on datacenter server, providing Cinema Embed]:`, embedErr.message);
   }
 
-  links.sort((a, b) => (parseInt(b.quality, 10) || 0) - (parseInt(a.quality, 10) || 0));
-
-  const seen = new Set();
-  const unique = links.filter(l => {
-    if (seen.has(l.quality)) return false;
-    seen.add(l.quality);
-    return true;
-  });
-
-  return unique.length > 0 ? unique : [{ quality: 'best', url: masterM3u8 }];
+  // If server scraping is challenged by Cloudflare on datacenter IP, return embedUrl for instant client-side playback!
+  return {
+    links: [],
+    embedUrl,
+    streamType: 'embed',
+  };
 }
 
 const POPULAR_SLUG_MAP = {
