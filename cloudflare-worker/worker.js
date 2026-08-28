@@ -201,6 +201,10 @@ async function queryAniList(searchTerm) {
 }
 
 async function searchAniList(searchTerm) {
+  if (!searchTerm || !searchTerm.trim()) return [];
+  const q = searchTerm.trim();
+
+  // Tier 1: AniList GraphQL
   const query = `
   query ($search: String) {
     Page(page: 1, perPage: 16) {
@@ -223,33 +227,102 @@ async function searchAniList(searchTerm) {
     const res = await fetch('https://graphql.anilist.co', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'User-Agent': AGENT },
-      body: JSON.stringify({ query, variables: { search: searchTerm } }),
+      body: JSON.stringify({ query, variables: { search: q } }),
     });
 
-    if (!res.ok) return [];
-    const data = await res.json();
-    const list = (data && data.data && data.data.Page && data.data.Page.media) || [];
+    if (res.ok) {
+      const data = await res.json();
+      const list = (data && data.data && data.data.Page && data.data.Page.media) || [];
+      if (list.length > 0) {
+        return list.map(m => {
+          const title = (m.title && (m.title.english || m.title.romaji)) || 'Anime';
+          const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+          const coverImg = (m.coverImage && (m.coverImage.large || m.coverImage.medium)) || null;
+          const bannerImg = m.bannerImage || (m.coverImage && m.coverImage.large) || null;
+          return {
+            id: slug,
+            title,
+            cover: coverImg,
+            img: coverImg,
+            banner: bannerImg,
+            score: m.averageScore ? (m.averageScore / 10).toFixed(1) : null,
+            year: m.seasonYear || 2024,
+            format: m.format || 'TV',
+            genres: m.genres || [],
+            description: m.description ? m.description.replace(/<[^>]+>/g, '').trim() : '',
+          };
+        });
+      }
+    }
+  } catch (_) {}
 
-    return list.map(m => {
-      const title = (m.title && (m.title.english || m.title.romaji)) || 'Anime';
-      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-      const coverImg = (m.coverImage && (m.coverImage.large || m.coverImage.medium)) || null;
-      const bannerImg = m.bannerImage || (m.coverImage && m.coverImage.large) || null;
-      return {
-        id: slug,
-        title,
-        img: coverImg,
-        banner: bannerImg,
-        score: m.averageScore ? (m.averageScore / 10).toFixed(1) : null,
-        year: m.seasonYear || 2024,
-        format: m.format || 'TV',
-        genres: m.genres || [],
-        description: m.description ? m.description.replace(/<[^>]+>/g, '').trim() : '',
-      };
+  // Tier 2: Kitsu Search Fallback
+  try {
+    const kitsuRes = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(q)}&page[limit]=14`, {
+      headers: { 'Accept': 'application/vnd.api+json', 'User-Agent': AGENT }
     });
-  } catch (_) {
-    return [];
-  }
+    if (kitsuRes.ok) {
+      const json = await kitsuRes.json();
+      const items = (json && json.data) || [];
+      if (items.length > 0) {
+        return items.map(item => {
+          const attr = item.attributes || {};
+          const title = attr.canonicalTitle || (attr.titles && (attr.titles.en || attr.titles.en_jp)) || 'Anime';
+          const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+          const coverImg = (attr.posterImage && (attr.posterImage.large || attr.posterImage.original || attr.posterImage.medium)) || null;
+          const bannerImg = (attr.coverImage && (attr.coverImage.large || attr.coverImage.original)) || coverImg;
+          return {
+            id: slug,
+            title,
+            cover: coverImg,
+            img: coverImg,
+            banner: bannerImg,
+            score: attr.averageRating ? (parseFloat(attr.averageRating) / 10).toFixed(1) : null,
+            year: attr.startDate ? parseInt(attr.startDate.slice(0, 4), 10) : 2024,
+            format: attr.subtype ? attr.subtype.toUpperCase() : 'TV',
+            genres: ['Action', 'Anime'],
+            description: attr.synopsis || '',
+          };
+        });
+      }
+    }
+  } catch (_) {}
+
+  // Tier 3: AniDB Direct Browse Scrape
+  try {
+    const browseRes = await fetch(`${ANIDB_BASE}/browse?q=${encodeURIComponent(q)}`, {
+      headers: BROWSER_HEADERS
+    });
+    if (browseRes.ok) {
+      const html = await browseRes.text();
+      const results = [];
+      const regex = /<a[^>]+href="\/anime\/([a-z0-9][a-z0-9-]*-\d+)"[^>]*>([\s\S]*?)<\/a>/gi;
+      let m;
+      while ((m = regex.exec(html)) !== null) {
+        const id = m[1];
+        const inner = m[2];
+        const imgMatch = inner.match(/src="([^"]+)"/);
+        const text = inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+        if (id && text && !results.find(r => r.id === id)) {
+          results.push({
+            id,
+            title: text,
+            cover: imgMatch ? imgMatch[1] : null,
+            img: imgMatch ? imgMatch[1] : null,
+            banner: null,
+            score: '8.0',
+            year: 2024,
+            format: 'TV',
+            genres: ['Action', 'Fantasy'],
+            description: ''
+          });
+        }
+      }
+      return results;
+    }
+  } catch (_) {}
+
+  return [];
 }
 
 function cleanTitleString(str) {

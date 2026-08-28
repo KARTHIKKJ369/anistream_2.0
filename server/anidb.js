@@ -385,13 +385,46 @@ async function searchAnime(query) {
   if (!query || !query.trim()) return [];
   const q = query.trim();
 
-  // Try fast, rich AniList search first
-  const anilistResults = await searchAniList(q);
-  if (anilistResults && anilistResults.length > 0) {
-    return anilistResults;
-  }
+  // 1. AniList
+  try {
+    const anilistResults = await searchAniList(q);
+    if (anilistResults && anilistResults.length > 0) return anilistResults;
+  } catch (_) {}
 
-  // Fallback to direct AniDB search
+  // 2. Kitsu
+  try {
+    const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(q)}&page[limit]=14`, {
+      headers: { 'Accept': 'application/vnd.api+json', 'User-Agent': AGENT },
+      timeout: 5000,
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const items = (json && json.data) || [];
+      if (items.length > 0) {
+        return items.map(item => {
+          const attr = item.attributes || {};
+          const title = attr.canonicalTitle || (attr.titles && (attr.titles.en || attr.titles.en_jp)) || 'Anime';
+          const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+          const coverImg = (attr.posterImage && (attr.posterImage.large || attr.posterImage.original || attr.posterImage.medium)) || null;
+          const bannerImg = (attr.coverImage && (attr.coverImage.large || attr.coverImage.original)) || coverImg;
+          return {
+            id: slug,
+            title,
+            cover: coverImg,
+            img: coverImg,
+            banner: bannerImg,
+            score: attr.averageRating ? (parseFloat(attr.averageRating) / 10).toFixed(1) : null,
+            year: attr.startDate ? parseInt(attr.startDate.slice(0, 4), 10) : 2024,
+            format: attr.subtype ? attr.subtype.toUpperCase() : 'TV',
+            genres: ['Action', 'Anime'],
+            description: attr.synopsis || '',
+          };
+        });
+      }
+    }
+  } catch (_) {}
+
+  // 3. Fallback to direct AniDB search
   return searchAnimeScrape(q);
 }
 
