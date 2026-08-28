@@ -29,17 +29,36 @@ function findCurl() {
 }
 
 const path = require('path');
+const fs = require('fs');
 
-const CF_WORKER_URL = process.env.CF_WORKER_URL ? process.env.CF_WORKER_URL.replace(/\/+$/, '') : null;
+function getWorkerUrl() {
+  if (process.env.CF_WORKER_URL) {
+    return process.env.CF_WORKER_URL.replace(/\/+$/, '');
+  }
+  const envPath = path.join(__dirname, '../.env');
+  if (fs.existsSync(envPath)) {
+    try {
+      const content = fs.readFileSync(envPath, 'utf8');
+      const match = content.match(/^\s*CF_WORKER_URL\s*=\s*(.*)?\s*$/m);
+      if (match && match[1]) {
+        const val = match[1].trim().replace(/^['"]|['"]$/g, '').replace(/\/+$/, '');
+        process.env.CF_WORKER_URL = val;
+        return val;
+      }
+    } catch (_) {}
+  }
+  return null;
+}
 
 /**
  * Executes Python curl_cffi (Chrome 124 impersonation) for instant Cloudflare bypass,
  * with fallback to Cloudflare Worker proxy or curl with custom TLS ciphers.
  */
 function anidbFetch(url, timeoutSec = 15) {
+  const workerUrl = getWorkerUrl();
   // If a Cloudflare Worker proxy is configured, use it directly
-  if (CF_WORKER_URL) {
-    const proxyUrl = `${CF_WORKER_URL}/proxy${url.replace(/^https?:\/\/[^\/]+/, '')}`;
+  if (workerUrl) {
+    const proxyUrl = `${workerUrl}/proxy${url.replace(/^https?:\/\/[^\/]+/, '')}`;
     return fetch(proxyUrl, {
       headers: { 'User-Agent': AGENT },
       timeout: timeoutSec * 1000
@@ -557,9 +576,10 @@ async function getStreamLinks(episodeId, lang = 'sub', animeId = null, epNumber 
   let embedUrl = null;
 
   // 1. If Cloudflare Worker is configured, query its dedicated stream extractor
-  if (CF_WORKER_URL && /^\d+$/.test(String(realEpId))) {
+  const workerUrl = getWorkerUrl();
+  if (workerUrl && /^\d+$/.test(String(realEpId))) {
     try {
-      const res = await fetch(`${CF_WORKER_URL}/stream/${encodeURIComponent(realEpId)}?lang=${encodeURIComponent(lang)}`, {
+      const res = await fetch(`${workerUrl}/stream/${encodeURIComponent(realEpId)}?lang=${encodeURIComponent(lang)}`, {
         headers: { 'User-Agent': AGENT },
         timeout: 12000
       });
