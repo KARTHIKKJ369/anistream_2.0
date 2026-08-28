@@ -432,6 +432,32 @@
           </div>
         </div>
 
+        <!-- Long Press 2X Speed Indicator Badge -->
+        <div class="speed-indicator-badge hidden" id="speed-badge">
+          <span class="speed-badge-bolt">⚡</span>
+          <span class="speed-badge-text">2X Speed</span>
+        </div>
+
+        <!-- Double-Tap Left Seek Visual Ripple -->
+        <div class="double-tap-ripple double-tap-left hidden" id="dt-ripple-left">
+          <div class="dt-ripple-content">
+            <div class="dt-icons">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M11 16.5l-6-4.5 6-4.5v9zm8 0l-6-4.5 6-4.5v9z"/></svg>
+            </div>
+            <span class="dt-text">-10s</span>
+          </div>
+        </div>
+
+        <!-- Double-Tap Right Seek Visual Ripple -->
+        <div class="double-tap-ripple double-tap-right hidden" id="dt-ripple-right">
+          <div class="dt-ripple-content">
+            <div class="dt-icons">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M13 7.5l6 4.5-6 4.5v-9zm-8 0l6 4.5-6 4.5v-9z"/></svg>
+            </div>
+            <span class="dt-text">+10s</span>
+          </div>
+        </div>
+
         <!-- Seek / Action Visual Ripple Indicator -->
         <div class="seek-ripple-indicator hidden" id="seek-ripple"></div>
 
@@ -449,8 +475,30 @@
               <span class="controls-ep-badge" id="player-ep-badge">Ep 1</span>
             </div>
             <div class="controls-top-right">
+              <button class="btn-icon" onclick="App.toggleSettingsMenu()" title="Playback Settings (S)">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+              </button>
               <button class="btn-icon" onclick="App.showShortcutsModal()" title="Keyboard Shortcuts (?)">⌨</button>
             </div>
+          </div>
+
+          <!-- Center Mobile / Quick Action Controls -->
+          <div class="center-controls" id="center-controls">
+            <!-- Center Rewind 10s -->
+            <button class="center-btn center-seek-btn" onclick="App.seekRelative(-10)" title="Rewind 10s">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M11 16.5l-6-4.5 6-4.5v9zm8 0l-6-4.5 6-4.5v9z"/></svg>
+              <span>10</span>
+            </button>
+            <!-- Center Big Play/Pause -->
+            <button class="center-btn center-play-btn" id="center-play-btn" onclick="App.togglePlay()" title="Play/Pause">
+              <svg id="center-icon-play" width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              <svg id="center-icon-pause" class="hidden" width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            </button>
+            <!-- Center Forward 10s -->
+            <button class="center-btn center-seek-btn" onclick="App.seekRelative(10)" title="Forward 10s">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M13 7.5l6 4.5-6 4.5v-9zm-8 0l6 4.5-6 4.5v-9z"/></svg>
+              <span>10</span>
+            </button>
           </div>
           
           <!-- Bottom Controls Bar -->
@@ -476,12 +524,12 @@
                 </button>
                 
                 <!-- Rewind 10s -->
-                <button class="control-btn" onclick="App.seekRelative(-10)" title="Rewind 10s (← / J)">
+                <button class="control-btn ctrl-seek-btn" onclick="App.seekRelative(-10)" title="Rewind 10s (← / J)">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg>
                 </button>
 
                 <!-- Forward 10s -->
-                <button class="control-btn" onclick="App.seekRelative(10)" title="Forward 10s (→ / L)">
+                <button class="control-btn ctrl-seek-btn" onclick="App.seekRelative(10)" title="Forward 10s (→ / L)">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 17l5-5-5-5M6 17l5-5-5-5"/></svg>
                 </button>
 
@@ -506,19 +554,142 @@
                 <button class="btn-glass btn-compact" id="prev-ep-btn" onclick="App.playPrevEp()" title="Previous Episode (P)">← Prev</button>
                 <button class="btn-glass btn-compact" id="next-ep-btn" onclick="App.playNextEp()" title="Next Episode (N)">Next →</button>
                 
-                <!-- In-Player Sub/Dub Switcher -->
-                <button class="btn-glass btn-compact" id="player-lang-btn" onclick="App.togglePlayerLang()" title="Switch SUB/DUB">SUB</button>
-
-                <!-- Quality Selection Pills -->
-                <div class="quality-pills-wrap" id="quality-pills"></div>
+                <!-- Unified Settings Button (⚙️) -->
+                <button class="control-btn" id="player-settings-btn" onclick="App.toggleSettingsMenu()" title="Settings (S)">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </button>
 
                 <!-- Fullscreen -->
-                <button class="control-btn" onclick="App.toggleFullscreen()" title="Fullscreen (F)">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                <button class="control-btn" id="fullscreen-btn" onclick="App.toggleFullscreen()" title="Fullscreen (F)">
+                  <svg id="icon-fs-enter" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                  <svg id="icon-fs-exit" class="hidden" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>
                 </button>
               </div>
 
             </div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════
+             UNIFIED PLAYER SETTINGS MODAL / POPUP
+        ═══════════════════════════════════════════════════════════ -->
+        <div class="player-settings-overlay hidden" id="player-settings-overlay" onclick="App.hideSettingsMenu(event)">
+          <div class="player-settings-panel" id="player-settings-panel" onclick="event.stopPropagation()">
+            
+            <!-- Main Settings View -->
+            <div class="settings-menu-view" id="settings-view-main">
+              <div class="settings-menu-header">
+                <div class="settings-header-title-wrap">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                  <h4 class="settings-title">Playback Settings</h4>
+                </div>
+                <button class="btn-icon" onclick="App.hideSettingsMenu()" title="Close">✕</button>
+              </div>
+
+              <div class="settings-menu-list">
+                <!-- Quality Option -->
+                <button class="settings-item" onclick="App.openSettingsSubmenu('quality')">
+                  <div class="settings-item-left">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                    <span>Quality</span>
+                  </div>
+                  <div class="settings-item-right">
+                    <span class="settings-val" id="settings-val-quality">Auto</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                  </div>
+                </button>
+
+                <!-- Audio / Subtitles Option -->
+                <button class="settings-item" onclick="App.openSettingsSubmenu('audio')">
+                  <div class="settings-item-left">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+                    <span>Audio Track</span>
+                  </div>
+                  <div class="settings-item-right">
+                    <span class="settings-val" id="settings-val-audio">SUB</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                  </div>
+                </button>
+
+                <!-- Playback Speed Option -->
+                <button class="settings-item" onclick="App.openSettingsSubmenu('speed')">
+                  <div class="settings-item-left">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <span>Playback Speed</span>
+                  </div>
+                  <div class="settings-item-right">
+                    <span class="settings-val" id="settings-val-speed">1x (Normal)</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                  </div>
+                </button>
+
+                <!-- Autoplay Next Toggle -->
+                <div class="settings-item settings-item-toggle">
+                  <div class="settings-item-left">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+                    <span>Autoplay Next Episode</span>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="settings-toggle-autonext" checked onchange="App.toggleAutoplayNextSetting(this.checked)" />
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quality Submenu View -->
+            <div class="settings-menu-view hidden" id="settings-view-quality">
+              <div class="settings-menu-header">
+                <button class="settings-back-btn" onclick="App.openSettingsSubmenu(null)">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                  <span>Quality</span>
+                </button>
+              </div>
+              <div class="settings-menu-list" id="settings-quality-list">
+                <!-- Injected dynamically based on streamLinks -->
+              </div>
+            </div>
+
+            <!-- Audio Track Submenu View -->
+            <div class="settings-menu-view hidden" id="settings-view-audio">
+              <div class="settings-menu-header">
+                <button class="settings-back-btn" onclick="App.openSettingsSubmenu(null)">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                  <span>Audio Track</span>
+                </button>
+              </div>
+              <div class="settings-menu-list">
+                <button class="settings-sub-item active" id="audio-opt-sub" onclick="App.setPlayerAudio('sub')">
+                  <span>Japanese (Subbed)</span>
+                  <span class="settings-check">✓</span>
+                </button>
+                <button class="settings-sub-item" id="audio-opt-dub" onclick="App.setPlayerAudio('dub')">
+                  <span>English (Dubbed)</span>
+                  <span class="settings-check">✓</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Playback Speed Submenu View -->
+            <div class="settings-menu-view hidden" id="settings-view-speed">
+              <div class="settings-menu-header">
+                <button class="settings-back-btn" onclick="App.openSettingsSubmenu(null)">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                  <span>Playback Speed</span>
+                </button>
+              </div>
+              <div class="settings-menu-list" id="settings-speed-list">
+                <button class="settings-sub-item" data-speed="0.25" onclick="App.setPlaybackSpeed(0.25)"><span>0.25x</span><span class="settings-check">✓</span></button>
+                <button class="settings-sub-item" data-speed="0.5" onclick="App.setPlaybackSpeed(0.5)"><span>0.5x</span><span class="settings-check">✓</span></button>
+                <button class="settings-sub-item" data-speed="0.75" onclick="App.setPlaybackSpeed(0.75)"><span>0.75x</span><span class="settings-check">✓</span></button>
+                <button class="settings-sub-item active" data-speed="1.0" onclick="App.setPlaybackSpeed(1.0)"><span>1.0x (Normal)</span><span class="settings-check">✓</span></button>
+                <button class="settings-sub-item" data-speed="1.25" onclick="App.setPlaybackSpeed(1.25)"><span>1.25x</span><span class="settings-check">✓</span></button>
+                <button class="settings-sub-item" data-speed="1.5" onclick="App.setPlaybackSpeed(1.5)"><span>1.5x</span><span class="settings-check">✓</span></button>
+                <button class="settings-sub-item" data-speed="1.75" onclick="App.setPlaybackSpeed(1.75)"><span>1.75x</span><span class="settings-check">✓</span></button>
+                <button class="settings-sub-item" data-speed="2.0" onclick="App.setPlaybackSpeed(2.0)"><span>2.0x</span><span class="settings-check">✓</span></button>
+              </div>
+            </div>
+
           </div>
         </div>
 

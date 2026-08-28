@@ -20,6 +20,18 @@ const App = (() => {
     currentEpIndex: 0,
     currentLang: 'sub',
     currentQuality: 'best',
+    currentPlaybackRate: 1.0,
+    autoplayNext: true,
+    isSettingsOpen: false,
+    activeSettingsSubmenu: null,
+    isLongPressing: false,
+    longPressTimer: null,
+    speedBeforeLongPress: 1.0,
+    justEndedLongPress: false,
+    singleTapTimer: null,
+    lastTapTime: 0,
+    lastTapZone: null,
+    isFullscreen: false,
     streamLinks: [],
     hlsInstance: null,
     historyData: [],
@@ -164,6 +176,11 @@ const App = (() => {
     const nav = document.querySelector('.nav-bar');
     if (nav) {
       nav.style.display = name === 'player' ? 'none' : 'flex';
+    }
+
+    const mobNav = $('mobile-bottom-nav');
+    if (mobNav) {
+      mobNav.style.display = name === 'player' ? 'none' : 'flex';
     }
 
     const linkHome = $('nav-link-home');
@@ -978,14 +995,26 @@ const App = (() => {
 
     $('player-anime-title').textContent = state.currentAnimeTitle || 'Anime Stream';
     $('player-ep-badge').textContent = `Episode ${ep.episodeNumber}`;
-    $('player-lang-btn').textContent = state.currentLang.toUpperCase();
+    
+    // Sync Settings Values
+    const langBtn = $('player-lang-btn');
+    if (langBtn) langBtn.textContent = state.currentLang.toUpperCase();
+    const aVal = $('settings-val-audio');
+    if (aVal) aVal.textContent = state.currentLang.toUpperCase();
+    const qVal = $('settings-val-quality');
+    if (qVal) qVal.textContent = state.currentQuality || 'Auto';
+    const sVal = $('settings-val-speed');
+    if (sVal) sVal.textContent = state.currentPlaybackRate === 1 ? '1x (Normal)' : `${state.currentPlaybackRate}x`;
+    const subBtn = $('audio-opt-sub');
+    if (subBtn) subBtn.classList.toggle('active', state.currentLang === 'sub');
+    const dubBtn = $('audio-opt-dub');
+    if (dubBtn) dubBtn.classList.toggle('active', state.currentLang === 'dub');
 
     $('prev-ep-btn').disabled = index === 0;
     $('next-ep-btn').disabled = index === state.currentEpisodes.length - 1;
 
     $('video-loading').classList.remove('hidden');
     $('video-error').classList.add('hidden');
-    $('quality-pills').innerHTML = '';
 
     destroyHls();
 
@@ -998,7 +1027,7 @@ const App = (() => {
         throw new Error(`No stream available for Episode ${ep.episodeNumber} in ${state.currentLang.toUpperCase()}.`);
       }
 
-      renderQualityPills();
+      renderQualitySubmenu();
       const preferred = pickQuality(state.currentQuality);
 
       let resumeTime = 0;
@@ -1038,35 +1067,114 @@ const App = (() => {
     return match || state.streamLinks[0];
   }
 
-  function renderQualityPills() {
-    const container = $('quality-pills');
-    if (!container) return;
-    container.innerHTML = '';
+  function renderQualitySubmenu() {
+    const list = $('settings-quality-list');
+    if (!list) return;
+    list.innerHTML = '';
     state.streamLinks.forEach((link, i) => {
-      const pill = document.createElement('button');
-      pill.className = 'quality-pill' + (i === 0 ? ' active' : '');
-      pill.textContent = link.quality;
-      pill.onclick = () => switchQuality(link, pill);
-      container.appendChild(pill);
+      const btn = document.createElement('button');
+      const isActive = (state.currentQuality === link.quality) || (!state.currentQuality && i === 0);
+      btn.className = 'settings-sub-item' + (isActive ? ' active' : '');
+      btn.innerHTML = `<span>${escHtml(link.quality)}</span><span class="settings-check">✓</span>`;
+      btn.onclick = () => switchQuality(link, btn);
+      list.appendChild(btn);
     });
   }
 
-  async function switchQuality(link, pillEl) {
-    document.querySelectorAll('.quality-pill').forEach(p => p.classList.remove('active'));
-    pillEl.classList.add('active');
+  async function switchQuality(link, btnEl) {
+    document.querySelectorAll('#settings-quality-list .settings-sub-item').forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
     state.currentQuality = link.quality;
+    const qVal = $('settings-val-quality');
+    if (qVal) qVal.textContent = link.quality;
     const video = $('video-player');
     const currentTime = video ? video.currentTime : 0;
     await loadStream(link.url, currentTime);
     toast(`Quality switched to ${link.quality}`);
   }
 
+  function setPlayerAudio(lang) {
+    if (state.currentLang === lang) return;
+    state.currentLang = lang;
+    const aVal = $('settings-val-audio');
+    if (aVal) aVal.textContent = lang.toUpperCase();
+    const subBtn = $('audio-opt-sub');
+    const dubBtn = $('audio-opt-dub');
+    if (subBtn) subBtn.classList.toggle('active', lang === 'sub');
+    if (dubBtn) dubBtn.classList.toggle('active', lang === 'dub');
+    toast(`Switched audio track to ${lang.toUpperCase()}`);
+    playEpisode(state.currentEpIndex, false);
+  }
+
   function togglePlayerLang() {
     const newLang = state.currentLang === 'sub' ? 'dub' : 'sub';
-    state.currentLang = newLang;
-    $('player-lang-btn').textContent = newLang.toUpperCase();
-    toast(`Switched audio track to ${newLang.toUpperCase()}`);
-    playEpisode(state.currentEpIndex, false);
+    setPlayerAudio(newLang);
+  }
+
+  function setPlaybackSpeed(speed) {
+    state.currentPlaybackRate = speed;
+    const video = $('video-player');
+    if (video) video.playbackRate = speed;
+    const sVal = $('settings-val-speed');
+    if (sVal) sVal.textContent = speed === 1 ? '1x (Normal)' : `${speed}x`;
+    document.querySelectorAll('#settings-speed-list .settings-sub-item').forEach(btn => {
+      const s = parseFloat(btn.getAttribute('data-speed'));
+      btn.classList.toggle('active', s === speed);
+    });
+    toast(`Playback speed set to ${speed}x`);
+  }
+
+  function toggleAutoplayNextSetting(enabled) {
+    state.autoplayNext = enabled;
+    toast(`Autoplay next episode: ${enabled ? 'ON' : 'OFF'}`);
+  }
+
+  function toggleSettingsMenu() {
+    const overlay = $('player-settings-overlay');
+    if (!overlay) return;
+    if (overlay.classList.contains('hidden')) {
+      showSettingsMenu();
+    } else {
+      hideSettingsMenu();
+    }
+  }
+
+  function showSettingsMenu() {
+    const overlay = $('player-settings-overlay');
+    if (!overlay) return;
+    openSettingsSubmenu(null);
+    overlay.classList.remove('hidden');
+    state.isSettingsOpen = true;
+
+    // Sync labels and inputs
+    const qVal = $('settings-val-quality');
+    if (qVal) qVal.textContent = state.currentQuality || 'Auto';
+    const aVal = $('settings-val-audio');
+    if (aVal) aVal.textContent = (state.currentLang || 'sub').toUpperCase();
+    const sVal = $('settings-val-speed');
+    if (sVal) sVal.textContent = state.currentPlaybackRate === 1 ? '1x (Normal)' : `${state.currentPlaybackRate}x`;
+    const autoNextCb = $('settings-toggle-autonext');
+    if (autoNextCb) autoNextCb.checked = state.autoplayNext !== false;
+  }
+
+  function hideSettingsMenu(e) {
+    if (e && e.target !== $('player-settings-overlay') && !e.target.classList.contains('btn-icon')) return;
+    const overlay = $('player-settings-overlay');
+    if (overlay) overlay.classList.add('hidden');
+    state.isSettingsOpen = false;
+  }
+
+  function openSettingsSubmenu(name) {
+    state.activeSettingsSubmenu = name;
+    const mainView = $('settings-view-main');
+    const qView = $('settings-view-quality');
+    const aView = $('settings-view-audio');
+    const sView = $('settings-view-speed');
+
+    if (mainView) mainView.classList.toggle('hidden', !!name);
+    if (qView) qView.classList.toggle('hidden', name !== 'quality');
+    if (aView) aView.classList.toggle('hidden', name !== 'audio');
+    if (sView) sView.classList.toggle('hidden', name !== 'speed');
   }
 
   async function loadStream(streamUrl, seekTo = 0) {
@@ -1079,7 +1187,10 @@ const App = (() => {
 
     destroyHls();
 
-    video.onplaying = () => loading.classList.add('hidden');
+    video.onplaying = () => {
+      loading.classList.add('hidden');
+      if (video && state.currentPlaybackRate) video.playbackRate = state.currentPlaybackRate;
+    };
     video.oncanplay = () => loading.classList.add('hidden');
     video.onloadeddata = () => loading.classList.add('hidden');
     video.onplay = () => loading.classList.add('hidden');
@@ -1112,6 +1223,7 @@ const App = (() => {
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         loading.classList.add('hidden');
         if (seekTo > 0) video.currentTime = seekTo;
+        if (state.currentPlaybackRate) video.playbackRate = state.currentPlaybackRate;
         video.play().catch(e => {
           console.warn('[autoplay notice]', e);
           loading.classList.add('hidden');
@@ -1146,6 +1258,7 @@ const App = (() => {
       video.addEventListener('loadedmetadata', () => {
         loading.classList.add('hidden');
         if (seekTo > 0) video.currentTime = seekTo;
+        if (state.currentPlaybackRate) video.playbackRate = state.currentPlaybackRate;
         video.play().catch(() => loading.classList.add('hidden'));
       }, { once: true });
     } else {
@@ -1192,16 +1305,57 @@ const App = (() => {
   function closePlayer() {
     destroyHls();
     cancelAutoNext();
+    if (state.isFullscreen) {
+      toggleFullscreen();
+    }
     navigateTo(`#/anime/${encodeURIComponent(state.currentAnimeId)}`);
   }
 
-  function toggleFullscreen() {
+  async function toggleFullscreen() {
     const wrap = $('video-wrap');
-    if (!document.fullscreenElement) {
-      if (wrap.requestFullscreen) wrap.requestFullscreen().catch(() => {});
-      else if (wrap.webkitRequestFullscreen) wrap.webkitRequestFullscreen();
+    const video = $('video-player');
+    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+    if (!isFs) {
+      try {
+        if (wrap.requestFullscreen) {
+          await wrap.requestFullscreen();
+        } else if (wrap.webkitRequestFullscreen) {
+          wrap.webkitRequestFullscreen();
+        } else if (video && video.webkitEnterFullscreen) {
+          video.webkitEnterFullscreen();
+        }
+      } catch (err) {
+        console.warn('[fullscreen request failed]', err);
+      }
+      // Lock screen orientation to landscape on mobile
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          await screen.orientation.lock('landscape');
+        } else if (screen.lockOrientation) {
+          screen.lockOrientation('landscape');
+        } else if (screen.mozLockOrientation) {
+          screen.mozLockOrientation('landscape');
+        } else if (screen.msLockOrientation) {
+          screen.msLockOrientation('landscape');
+        }
+      } catch (_) {}
     } else {
-      if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+      try {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+      } catch (_) {}
+      // Unlock screen orientation
+      try {
+        if (screen.orientation && screen.orientation.unlock) {
+          screen.orientation.unlock();
+        } else if (screen.unlockOrientation) {
+          screen.unlockOrientation();
+        }
+      } catch (_) {}
     }
   }
 
@@ -1215,6 +1369,15 @@ const App = (() => {
       video.pause();
       showRippleIndicator('Pause');
     }
+  }
+
+  function updatePlayPauseIcons(isPlaying) {
+    const p = $('icon-play'), pause = $('icon-pause');
+    const cp = $('center-icon-play'), cpause = $('center-icon-pause');
+    if (p) p.classList.toggle('hidden', isPlaying);
+    if (pause) pause.classList.toggle('hidden', !isPlaying);
+    if (cp) cp.classList.toggle('hidden', isPlaying);
+    if (cpause) cpause.classList.toggle('hidden', !isPlaying);
   }
 
   function toggleMute() {
@@ -1256,9 +1419,28 @@ const App = (() => {
     ripple._timer = setTimeout(() => ripple.classList.add('hidden'), 500);
   }
 
+  function showDoubleTapRipple(side) {
+    const ripple = $(side === 'left' ? 'dt-ripple-left' : 'dt-ripple-right');
+    if (!ripple) return;
+    ripple.classList.remove('hidden');
+    clearTimeout(ripple._timer);
+    ripple._timer = setTimeout(() => ripple.classList.add('hidden'), 500);
+  }
+
+  function toggleControlsVisibility() {
+    const controls = $('custom-controls');
+    if (!controls) return;
+    if (controls.classList.contains('idle')) {
+      resetControlsTimeout();
+    } else {
+      hideControls();
+    }
+  }
+
   // ─── AUTO-NEXT EPISODE COUNTDOWN ─────────────────────────────────
 
   function handleVideoEnded() {
+    if (state.autoplayNext === false) return;
     if (state.currentEpIndex < state.currentEpisodes.length - 1) {
       const nextEp = state.currentEpisodes[state.currentEpIndex + 1];
       const overlay = $('auto-next-overlay');
@@ -1334,18 +1516,8 @@ const App = (() => {
       if (dur) dur.textContent = formatTime(video.duration);
     });
 
-    video.addEventListener('play', () => {
-      const p = $('icon-play'), pause = $('icon-pause');
-      if (p) p.classList.add('hidden');
-      if (pause) pause.classList.remove('hidden');
-    });
-
-    video.addEventListener('pause', () => {
-      const p = $('icon-play'), pause = $('icon-pause');
-      if (p) p.classList.remove('hidden');
-      if (pause) pause.classList.add('hidden');
-    });
-
+    video.addEventListener('play', () => updatePlayPauseIcons(true));
+    video.addEventListener('pause', () => updatePlayPauseIcons(false));
     video.addEventListener('ended', handleVideoEnded);
 
     video.addEventListener('volumechange', () => {
@@ -1360,9 +1532,27 @@ const App = (() => {
       }
     });
 
+    // Fullscreen state listener
+    const onFsChange = () => {
+      const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      state.isFullscreen = isFs;
+      const enterIcon = $('icon-fs-enter');
+      const exitIcon = $('icon-fs-exit');
+      if (enterIcon) enterIcon.classList.toggle('hidden', isFs);
+      if (exitIcon) exitIcon.classList.toggle('hidden', !isFs);
+      if (!isFs) {
+        try {
+          if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+        } catch (_) {}
+      }
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
+
     const topBar = document.querySelector('.controls-top-bar');
     const bottomBar = document.querySelector('.controls-bottom-bar');
-    [topBar, bottomBar].forEach(bar => {
+    const centerControls = $('center-controls');
+    [topBar, bottomBar, centerControls].forEach(bar => {
       if (bar) {
         bar.addEventListener('mouseenter', () => {
           isMouseOverControls = true;
@@ -1387,9 +1577,171 @@ const App = (() => {
         hideControls();
       }
     });
-    wrap.addEventListener('click', e => {
+
+    // ─── TOUCH & GESTURE RECOGNIZER ──────────────────────────────────
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    let touchMoved = false;
+
+    wrap.addEventListener('touchstart', (e) => {
+      // Ignore if clicking within interactive buttons or settings modal
+      if (e.target.closest('button') || e.target.closest('.player-settings-panel') || e.target.closest('.progress-container') || e.target.closest('input')) {
+        return;
+      }
+
+      touchMoved = false;
+      const t = e.touches[0];
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+      touchStartTime = Date.now();
+
+      // Start Long Press Hold Detection (> 300ms) -> 2X Speed
+      clearTimeout(state.longPressTimer);
+      state.longPressTimer = setTimeout(() => {
+        if (!touchMoved) {
+          state.isLongPressing = true;
+          const v = $('video-player');
+          if (v) {
+            state.speedBeforeLongPress = v.playbackRate || 1.0;
+            v.playbackRate = 2.0;
+          }
+          const badge = $('speed-badge');
+          if (badge) badge.classList.remove('hidden');
+          if (navigator.vibrate) {
+            try { navigator.vibrate(15); } catch (_) {}
+          }
+        }
+      }, 300);
+    }, { passive: true });
+
+    wrap.addEventListener('touchmove', (e) => {
+      if (e.touches && e.touches.length > 0) {
+        const t = e.touches[0];
+        const dist = Math.hypot(t.clientX - touchStartX, t.clientY - touchStartY);
+        if (dist > 12) {
+          touchMoved = true;
+          clearTimeout(state.longPressTimer);
+        }
+      }
+    }, { passive: true });
+
+    const handleTouchEnd = (e) => {
+      clearTimeout(state.longPressTimer);
+
+      if (state.isLongPressing) {
+        state.isLongPressing = false;
+        const v = $('video-player');
+        if (v) {
+          v.playbackRate = state.currentPlaybackRate || state.speedBeforeLongPress || 1.0;
+        }
+        const badge = $('speed-badge');
+        if (badge) badge.classList.add('hidden');
+        state.justEndedLongPress = true;
+        setTimeout(() => { state.justEndedLongPress = false; }, 350);
+        return;
+      }
+
+      if (touchMoved) return;
+
+      const duration = Date.now() - touchStartTime;
+      if (duration < 300) {
+        // User performed a quick tap
+        const rect = wrap.getBoundingClientRect();
+        const relX = (touchStartX - rect.left) / rect.width;
+        const now = Date.now();
+
+        if (relX < 0.38) {
+          // Left Zone: Seek Backward
+          if (now - state.lastTapTime < 280 && state.lastTapZone === 'left') {
+            clearTimeout(state.singleTapTimer);
+            state.lastTapTime = 0;
+            state.lastTapZone = null;
+            seekRelative(-10);
+            showDoubleTapRipple('left');
+          } else {
+            state.lastTapTime = now;
+            state.lastTapZone = 'left';
+            clearTimeout(state.singleTapTimer);
+            state.singleTapTimer = setTimeout(() => {
+              toggleControlsVisibility();
+              state.lastTapZone = null;
+            }, 280);
+          }
+        } else if (relX > 0.62) {
+          // Right Zone: Seek Forward
+          if (now - state.lastTapTime < 280 && state.lastTapZone === 'right') {
+            clearTimeout(state.singleTapTimer);
+            state.lastTapTime = 0;
+            state.lastTapZone = null;
+            seekRelative(10);
+            showDoubleTapRipple('right');
+          } else {
+            state.lastTapTime = now;
+            state.lastTapZone = 'right';
+            clearTimeout(state.singleTapTimer);
+            state.singleTapTimer = setTimeout(() => {
+              toggleControlsVisibility();
+              state.lastTapZone = null;
+            }, 280);
+          }
+        } else {
+          // Middle Zone: Toggle controls visibility (Does NOT pause video!)
+          clearTimeout(state.singleTapTimer);
+          state.lastTapTime = 0;
+          state.lastTapZone = null;
+          toggleControlsVisibility();
+        }
+      }
+    };
+
+    wrap.addEventListener('touchend', handleTouchEnd);
+    wrap.addEventListener('touchcancel', () => {
+      clearTimeout(state.longPressTimer);
+      if (state.isLongPressing) {
+        state.isLongPressing = false;
+        const v = $('video-player');
+        if (v) v.playbackRate = state.currentPlaybackRate || 1.0;
+        const badge = $('speed-badge');
+        if (badge) badge.classList.add('hidden');
+      }
+    });
+
+    // Desktop mouse click & long-press hold on video
+    let mousePressTimer = null;
+    wrap.addEventListener('mousedown', (e) => {
       if (e.target === video || e.target === wrap) {
-        togglePlay();
+        clearTimeout(mousePressTimer);
+        mousePressTimer = setTimeout(() => {
+          state.isLongPressing = true;
+          const v = $('video-player');
+          if (v) {
+            state.speedBeforeLongPress = v.playbackRate || 1.0;
+            v.playbackRate = 2.0;
+          }
+          const badge = $('speed-badge');
+          if (badge) badge.classList.remove('hidden');
+        }, 320);
+      }
+    });
+
+    wrap.addEventListener('mouseup', () => {
+      clearTimeout(mousePressTimer);
+      if (state.isLongPressing) {
+        state.isLongPressing = false;
+        const v = $('video-player');
+        if (v) v.playbackRate = state.currentPlaybackRate || 1.0;
+        const badge = $('speed-badge');
+        if (badge) badge.classList.add('hidden');
+        state.justEndedLongPress = true;
+        setTimeout(() => { state.justEndedLongPress = false; }, 350);
+      }
+    });
+
+    wrap.addEventListener('click', (e) => {
+      if (state.justEndedLongPress) return;
+      if (e.target === video || e.target === wrap) {
+        toggleControlsVisibility();
       }
     });
 
@@ -1461,7 +1813,7 @@ const App = (() => {
   function hideControls() {
     const video = $('video-player');
     const controls = $('custom-controls');
-    if (isMouseOverControls || state.isScrubbing) return;
+    if (isMouseOverControls || state.isScrubbing || state.isSettingsOpen) return;
     if (video && !video.paused && controls && state.currentView === 'player') {
       controls.classList.add('idle');
       document.body.style.cursor = 'none';
@@ -1489,6 +1841,10 @@ const App = (() => {
 
       // Escape key handler
       if (e.key === 'Escape') {
+        if (state.isSettingsOpen) {
+          hideSettingsMenu();
+          return;
+        }
         hideShortcutsModal();
         toggleMenu(true);
         if (state.currentView === 'player') closePlayer();
@@ -1509,6 +1865,9 @@ const App = (() => {
         } else if (e.key === 'm' || e.key === 'M') {
           e.preventDefault();
           toggleMute();
+        } else if (e.key === 's' || e.key === 'S') {
+          e.preventDefault();
+          toggleSettingsMenu();
         } else if (e.key === 'ArrowLeft' || e.key === 'j' || e.key === 'J') {
           e.preventDefault();
           seekRelative(-10);
@@ -1655,7 +2014,15 @@ const App = (() => {
     onHeroInfo,
     filterGenre,
     focusMobileSearch,
+    toggleSettingsMenu,
+    showSettingsMenu,
+    hideSettingsMenu,
+    openSettingsSubmenu,
+    setPlayerAudio,
+    setPlaybackSpeed,
+    toggleAutoplayNextSetting,
   };
 })();
 
 document.addEventListener('DOMContentLoaded', () => App.init());
+
