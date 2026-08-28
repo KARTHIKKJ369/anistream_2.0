@@ -783,7 +783,8 @@ const App = (() => {
     destroyHls();
 
     try {
-      const data = await api(`/api/stream/${ep.episodeId}?lang=${state.currentLang}`);
+      const streamEndpoint = `/api/stream/${encodeURIComponent(ep.episodeId)}?lang=${state.currentLang}&animeId=${encodeURIComponent(state.currentAnimeId || '')}&ep=${ep.episodeNumber}`;
+      const data = await api(streamEndpoint);
       state.streamLinks = data.links || [];
 
       if (!state.streamLinks.length) throw new Error(`No stream available for Episode ${ep.episodeNumber} in ${state.currentLang.toUpperCase()}.`);

@@ -512,9 +512,31 @@ async function generateFallbackEpisodes(resolvedId) {
   }));
 }
 
-async function getStreamLinks(episodeId, lang = 'sub') {
+async function getStreamLinks(episodeId, lang = 'sub', animeId = null, epNumber = null) {
+  let realEpId = episodeId;
+
+  // Auto-resolve non-numeric/synthetic episode IDs (e.g. one-piece-ep-1)
+  if (!/^\d+$/.test(String(episodeId))) {
+    const match = String(episodeId).match(/^(.*?)-ep-(\d+)$/);
+    const targetAnime = animeId || (match ? match[1] : null);
+    const targetEp = (epNumber !== null && epNumber !== undefined) ? parseInt(epNumber, 10) : (match ? parseInt(match[2], 10) : 1);
+
+    if (targetAnime) {
+      try {
+        const resolvedAnime = await resolveAnidbId(targetAnime);
+        const eps = await getEpisodes(resolvedAnime);
+        const found = eps.find(e => e.episodeNumber === targetEp);
+        if (found && /^\d+$/.test(found.episodeId)) {
+          realEpId = found.episodeId;
+        }
+      } catch (err) {
+        console.warn(`[getStreamLinks ep resolution warning]:`, err.message);
+      }
+    }
+  }
+
   const langCode = lang === 'dub' ? 'eng' : 'jpn';
-  const url = `${BASE_API}/api/frontend/episode/${episodeId}/languages`;
+  const url = `${BASE_API}/api/frontend/episode/${realEpId}/languages`;
   const text = await anidbFetch(url, 15);
 
   let embedUrl = null;
