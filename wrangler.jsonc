@@ -1,5 +1,5 @@
 {
-  "name": "anistream",
+  "name": "anistream-2-0",
   "main": "cloudflare-worker/worker.js",
   "compatibility_date": "2024-04-01",
   "assets": {
