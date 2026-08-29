@@ -48,6 +48,28 @@ function curlFetch(url, timeoutSec = 30) {
 const app = express();
 const PORT = process.env.PORT || 7474;
 
+// ─── AUTHENTICATION CONFIG & HELPERS ────────────────────────────────────────
+const AUTH_CONFIG = {
+  id: process.env.AUTH_ID || 'admin',
+  password: process.env.AUTH_PASSWORD || 'password',
+  token: process.env.AUTH_TOKEN || 'anistream_auth_token'
+};
+
+function verifyAuth(req) {
+  const authHeader = req.headers.authorization || '';
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  const tokenFromHeader = match ? match[1] : req.headers['x-auth-token'];
+
+  const cookieHeader = req.headers.cookie || '';
+  const cookieMatch = cookieHeader.match(/anistream_auth=([^;]+)/);
+  const tokenFromCookie = cookieMatch ? cookieMatch[1] : null;
+
+  const queryToken = req.query && req.query.auth;
+
+  const providedToken = tokenFromHeader || tokenFromCookie || queryToken;
+  return providedToken === AUTH_CONFIG.token;
+}
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public'), {
   setHeaders: (res, filePath) => {
@@ -56,6 +78,41 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
     }
   }
 }));
+
+// ─── AUTH ENDPOINTS ─────────────────────────────────────────────────────────
+
+app.post('/api/auth/login', (req, res) => {
+  const { id, password } = req.body || {};
+  if (id === AUTH_CONFIG.id && password === AUTH_CONFIG.password) {
+    res.setHeader('Set-Cookie', `anistream_auth=${AUTH_CONFIG.token}; Path=/; Max-Age=2592000; SameSite=Lax`);
+    return res.json({
+      ok: true,
+      token: AUTH_CONFIG.token,
+      user: { id: AUTH_CONFIG.id, name: AUTH_CONFIG.id }
+    });
+  }
+  return res.status(401).json({ ok: false, error: 'Invalid User ID or Password' });
+});
+
+app.get('/api/auth/verify', (req, res) => {
+  if (verifyAuth(req)) {
+    return res.json({ authenticated: true, user: { id: AUTH_CONFIG.id, name: AUTH_CONFIG.id } });
+  }
+  return res.status(401).json({ authenticated: false });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.setHeader('Set-Cookie', 'anistream_auth=; Path=/; Max-Age=0; SameSite=Lax');
+  return res.json({ ok: true });
+});
+
+// ─── PROTECT API ROUTES ─────────────────────────────────────────────────────
+
+app.use('/api', (req, res, next) => {
+  if (req.path === '/auth/login') return next();
+  if (verifyAuth(req)) return next();
+  return res.status(401).json({ error: 'Unauthorized access. Please log in.', unauthenticated: true });
+});
 
 // ─── LIVE FEATURED & TRENDING SECTIONS ──────────────────────────────────────
 
@@ -254,6 +311,10 @@ app.delete('/api/history/:animeId', (req, res) => {
 // ─── PROXY: HLS Streams & Segment Streaming with Process Safety ────────────
 
 app.get('/proxy/stream', async (req, res) => {
+  if (!verifyAuth(req)) {
+    return res.status(401).send('Unauthorized stream access');
+  }
+
   const { url } = req.query;
   if (!url) return res.status(400).send('url param required');
 

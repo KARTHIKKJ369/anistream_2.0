@@ -31,6 +31,92 @@
   </svg>
 
   <!-- ═══════════════════════════════════════════════════════════
+       AUTHENTICATION GATE OVERLAY (Otaku Cinema Lock)
+  ═══════════════════════════════════════════════════════════ -->
+  <div class="auth-gate hidden" id="auth-gate">
+    <div class="auth-backdrop-fx">
+      <div class="auth-glow-orb auth-glow-orb--1"></div>
+      <div class="auth-glow-orb auth-glow-orb--2"></div>
+      <div class="auth-grid-lines"></div>
+    </div>
+
+    <div class="auth-card" id="auth-card">
+      <div class="auth-header">
+        <div class="brand-logo auth-logo">
+          <svg class="brand-logo-icon" width="36" height="36" viewBox="0 0 32 32" fill="none">
+            <rect width="32" height="32" rx="8" fill="#181822" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+            <path d="M10 7L24 16L10 25V7Z" fill="url(#brand-grad)"/>
+            <path d="M10 7L18 16L10 25V7Z" fill="rgba(255,255,255,0.2)"/>
+            <circle cx="24" cy="16" r="2.2" fill="#ffffff"/>
+          </svg>
+          <div class="brand-title-wrap">
+            <span class="brand-title">ANI<span class="brand-accent">STREAM</span></span>
+            <span class="brand-subtitle">CINEMA 2.0</span>
+          </div>
+        </div>
+        <div class="auth-badge">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          <span>RESTRICTED ACCESS</span>
+        </div>
+        <h2 class="auth-title">Otaku Cinema Gate</h2>
+        <p class="auth-desc">Enter your credentials to unlock your private anime theater session.</p>
+      </div>
+
+      <form class="auth-form" id="auth-form" onsubmit="App.handleLoginSubmit(event)">
+        <div class="auth-input-group">
+          <label class="auth-label" for="auth-id-input">User ID</label>
+          <div class="auth-input-wrap">
+            <svg class="auth-input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <input
+              type="text"
+              id="auth-id-input"
+              class="auth-input"
+              placeholder="Enter User ID"
+              autocomplete="username"
+              autocapitalize="none"
+              spellcheck="false"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="auth-input-group">
+          <label class="auth-label" for="auth-password-input">Password</label>
+          <div class="auth-input-wrap">
+            <svg class="auth-input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            <input
+              type="password"
+              id="auth-password-input"
+              class="auth-input"
+              placeholder="Enter Password"
+              autocomplete="current-password"
+              required
+            />
+            <button type="button" class="auth-toggle-pass" onclick="App.togglePasswordVisibility()" title="Toggle password visibility" aria-label="Toggle password visibility">
+              <svg id="auth-eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="auth-error hidden" id="auth-error-msg">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          <span id="auth-error-text">Invalid User ID or Password</span>
+        </div>
+
+        <button type="submit" class="btn-crimson auth-submit-btn" id="auth-submit-btn">
+          <span class="auth-btn-spinner hidden" id="auth-spinner"></span>
+          <span id="auth-btn-text">Enter Cinema</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </button>
+      </form>
+
+      <div class="auth-footer">
+        <span>AniStream Security Gateway • Encrypted Private Session</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
        SIDE DRAWER NAVIGATION
   ═══════════════════════════════════════════════════════════ -->
   <div class="side-drawer-overlay hidden" id="side-drawer-overlay" onclick="App.toggleMenu()"></div>
@@ -50,6 +136,22 @@
       </div>
       <button class="btn-icon" onclick="App.toggleMenu()" aria-label="Close menu">✕</button>
     </div>
+
+    <!-- Authenticated User Profile in Drawer -->
+    <div class="drawer-user-info" id="drawer-user-info">
+      <div class="drawer-user-avatar">
+        <span id="drawer-user-avatar-text">U</span>
+        <span class="user-status-dot"></span>
+      </div>
+      <div class="drawer-user-meta">
+        <div class="drawer-user-name" id="drawer-user-name">User</div>
+        <div class="drawer-user-status">Private Session Active</div>
+      </div>
+      <button class="drawer-logout-btn" onclick="App.logout(); App.toggleMenu();" title="Sign Out" aria-label="Sign Out">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+      </button>
+    </div>
+
     <div class="drawer-links">
       <a href="#/" onclick="App.toggleMenu()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
@@ -125,6 +227,18 @@
         <button class="nav-icon-btn" onclick="App.showShortcutsModal()" title="Keyboard Shortcuts (?)">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
         </button>
+
+        <!-- User Profile Badge & Logout in Nav -->
+        <div class="nav-user-badge" id="nav-user-badge">
+          <div class="user-avatar" title="Signed in session active">
+            <span id="nav-user-avatar-text">U</span>
+            <span class="user-status-dot"></span>
+          </div>
+          <span class="user-name" id="nav-user-name">User</span>
+          <button class="nav-icon-btn nav-logout-btn" onclick="App.logout()" title="Sign Out" aria-label="Sign Out">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          </button>
+        </div>
       </div>
 
     </div>

@@ -635,6 +635,30 @@ async function getLiveFeaturedAnime() {
   return null;
 }
 
+// ─── AUTHENTICATION CONFIG & HELPERS ────────────────────────────────────────
+const AUTH_CONFIG = {
+  id: 'admin',
+  password: 'password',
+  token: 'anistream_auth_token'
+};
+
+function verifyAuth(request, env) {
+  const expectedToken = (env && env.AUTH_TOKEN) || AUTH_CONFIG.token;
+  const authHeader = request.headers.get('Authorization') || '';
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  const tokenFromHeader = match ? match[1] : request.headers.get('x-auth-token');
+  
+  const cookieHeader = request.headers.get('Cookie') || '';
+  const cookieMatch = cookieHeader.match(/anistream_auth=([^;]+)/);
+  const tokenFromCookie = cookieMatch ? cookieMatch[1] : null;
+
+  const url = new URL(request.url);
+  const queryToken = url.searchParams.get('auth');
+
+  const providedToken = tokenFromHeader || tokenFromCookie || queryToken;
+  return providedToken === expectedToken;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -653,6 +677,51 @@ export default {
     // ── Health check ────────────────────────────────────────────────────────
     if (url.pathname === '/health') {
       return jsonRes({ status: 'ok', service: 'anistream-serverless' });
+    }
+
+    // ── AUTH ENDPOINTS ──────────────────────────────────────────────────────
+    if (url.pathname === '/api/auth/login' && request.method === 'POST') {
+      try {
+        const body = await request.json();
+        const expectedId = (env && env.AUTH_ID) || AUTH_CONFIG.id;
+        const expectedPass = (env && env.AUTH_PASSWORD) || AUTH_CONFIG.password;
+        const token = (env && env.AUTH_TOKEN) || AUTH_CONFIG.token;
+
+        if (body && body.id === expectedId && body.password === expectedPass) {
+          return jsonRes({
+            ok: true,
+            token: token,
+            user: { id: expectedId, name: expectedId }
+          }, 200, {
+            'Set-Cookie': `anistream_auth=${token}; Path=/; Max-Age=2592000; SameSite=Lax`
+          });
+        }
+        return jsonRes({ ok: false, error: 'Invalid User ID or Password' }, 401);
+      } catch (err) {
+        return jsonRes({ ok: false, error: 'Malformed request body' }, 400);
+      }
+    }
+
+    if (url.pathname === '/api/auth/verify') {
+      const isAuth = verifyAuth(request, env);
+      if (isAuth) {
+        const expectedId = (env && env.AUTH_ID) || AUTH_CONFIG.id;
+        return jsonRes({ authenticated: true, user: { id: expectedId, name: expectedId } });
+      }
+      return jsonRes({ authenticated: false }, 401);
+    }
+
+    if (url.pathname === '/api/auth/logout') {
+      return jsonRes({ ok: true }, 200, {
+        'Set-Cookie': 'anistream_auth=; Path=/; Max-Age=0; SameSite=Lax'
+      });
+    }
+
+    // ── Protect API endpoints ───────────────────────────────────────────────
+    if (url.pathname.startsWith('/api/')) {
+      if (!verifyAuth(request, env)) {
+        return jsonRes({ error: 'Unauthorized access. Please log in.', unauthenticated: true }, 401);
+      }
     }
 
     // ── API: /api/featured ──────────────────────────────────────────────────
@@ -822,6 +891,10 @@ export default {
 
     // ── Dedicated CORS Stream Relay: /proxy/stream or /proxy-stream?url=... ──────────────────
     if (url.pathname === '/proxy/stream' || url.pathname === '/proxy-stream') {
+      if (!verifyAuth(request, env)) {
+        return new Response('Unauthorized stream access', { status: 401, headers: { 'Access-Control-Allow-Origin': '*' } });
+      }
+
       const targetUrl = url.searchParams.get('url');
       if (!targetUrl) {
         return new Response('Missing url param', { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });

@@ -57,7 +57,8 @@ const App = (() => {
   // ─── LOCAL STORAGE RESILIENT STORAGE ──────────────────────────────
   const STORAGE_KEYS = {
     HISTORY: 'anistream_history_v2',
-    PROGRESS: 'anistream_progress_v2'
+    PROGRESS: 'anistream_progress_v2',
+    AUTH_TOKEN: 'anistream_auth_token_v2'
   };
 
   function getLocalHistory() {
@@ -73,6 +74,179 @@ const App = (() => {
     try {
       localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history.slice(0, 40)));
     } catch (_) {}
+  }
+
+  function getAuthToken() {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN) || '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function setAuthToken(token) {
+    try {
+      if (token) {
+        localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+      }
+    } catch (_) {}
+  }
+
+  // ─── AUTHENTICATION MANAGER ───────────────────────────────────────
+
+  function showAuthGate() {
+    const gate = $('auth-gate');
+    if (gate) {
+      gate.classList.remove('hidden');
+      const idInput = $('auth-id-input');
+      if (idInput) {
+        setTimeout(() => idInput.focus(), 150);
+      }
+    }
+  }
+
+  function hideAuthGate() {
+    const gate = $('auth-gate');
+    if (gate) {
+      gate.classList.add('hidden');
+    }
+  }
+
+  function updateNavUserProfile(user) {
+    const name = (user && (user.name || user.id)) || 'User';
+    const initial = name.charAt(0).toUpperCase() || 'U';
+
+    const navName = $('nav-user-name');
+    if (navName) navName.textContent = name;
+
+    const navAvatar = $('nav-user-avatar-text');
+    if (navAvatar) navAvatar.textContent = initial;
+
+    const drawerName = $('drawer-user-name');
+    if (drawerName) drawerName.textContent = name;
+
+    const drawerAvatar = $('drawer-user-avatar-text');
+    if (drawerAvatar) drawerAvatar.textContent = initial;
+  }
+
+  async function checkAuth() {
+    const token = getAuthToken();
+    if (!token) {
+      showAuthGate();
+      return false;
+    }
+
+    try {
+      const res = await fetch('/api/auth/verify', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        updateNavUserProfile(data.user);
+        hideAuthGate();
+        return true;
+      } else {
+        showAuthGate();
+        return false;
+      }
+    } catch (_) {
+      // Offline / network fallback: allow session if token is saved
+      hideAuthGate();
+      return true;
+    }
+  }
+
+  async function handleLoginSubmit(event) {
+    if (event) event.preventDefault();
+
+    const idInput = $('auth-id-input');
+    const passInput = $('auth-password-input');
+    const errBox = $('auth-error-msg');
+    const errText = $('auth-error-text');
+    const submitBtn = $('auth-submit-btn');
+    const spinner = $('auth-spinner');
+    const btnText = $('auth-btn-text');
+    const card = $('auth-card');
+
+    if (!idInput || !passInput) return;
+
+    const id = idInput.value.trim();
+    const password = passInput.value.trim();
+
+    if (!id || !password) {
+      if (errBox) errBox.classList.remove('hidden');
+      if (errText) errText.textContent = 'Please enter both User ID and Password';
+      return;
+    }
+
+    if (errBox) errBox.classList.add('hidden');
+    if (submitBtn) submitBtn.disabled = true;
+    if (spinner) spinner.classList.remove('hidden');
+    if (btnText) btnText.textContent = 'Authenticating...';
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, password })
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.ok && data.token) {
+        setAuthToken(data.token);
+        updateNavUserProfile(data.user);
+        hideAuthGate();
+        toast('Welcome back to AniStream!');
+        passInput.value = '';
+        await handleHashChange();
+      } else {
+        if (errBox) errBox.classList.remove('hidden');
+        if (errText) errText.textContent = (data && data.error) || 'Invalid User ID or Password';
+        if (card) {
+          card.classList.remove('shake');
+          void card.offsetWidth; // trigger reflow
+          card.classList.add('shake');
+        }
+      }
+    } catch (err) {
+      if (errBox) errBox.classList.remove('hidden');
+      if (errText) errText.textContent = 'Authentication server connection error';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+      if (spinner) spinner.classList.add('hidden');
+      if (btnText) btnText.textContent = 'Enter Cinema';
+    }
+  }
+
+  async function logout() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (_) {}
+
+    setAuthToken(null);
+    showAuthGate();
+    toast('Signed out of AniStream');
+  }
+
+  function togglePasswordVisibility() {
+    const input = $('auth-password-input');
+    const icon = $('auth-eye-icon');
+    if (!input) return;
+
+    if (input.type === 'password') {
+      input.type = 'text';
+      if (icon) {
+        icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+      }
+    } else {
+      input.type = 'password';
+      if (icon) {
+        icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+      }
+    }
   }
 
   // ─── UTILITIES & HELPERS ──────────────────────────────────────────
@@ -114,8 +288,18 @@ const App = (() => {
   // ─── API CLIENT ───────────────────────────────────────────────────
 
   async function api(path, opts = {}) {
+    const headers = Object.assign({}, opts.headers || {});
+    const token = getAuthToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    opts.headers = headers;
+
     const res = await fetch(path, opts);
     if (!res.ok) {
+      if (res.status === 401 && path !== '/api/auth/login') {
+        showAuthGate();
+      }
       let errText = res.statusText;
       try {
         const body = await res.json();
@@ -249,7 +433,7 @@ const App = (() => {
     setLocalHistory(state.historyData);
 
     try {
-      await fetch('/api/history', {
+      await api('/api/history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(entry),
@@ -271,7 +455,7 @@ const App = (() => {
     if (state.currentView === 'history') showHistory();
     toast('Removed from watch history');
 
-    fetch(`/api/history/${encodeURIComponent(animeId)}`, { method: 'DELETE' }).catch(() => {});
+    api(`/api/history/${encodeURIComponent(animeId)}`, { method: 'DELETE' }).catch(() => {});
   }
 
   async function clearHistory() {
@@ -283,7 +467,7 @@ const App = (() => {
     else if (state.currentView === 'history') showHistory();
 
     try {
-      await fetch('/api/history', { method: 'DELETE' });
+      await api('/api/history', { method: 'DELETE' });
     } catch (_) {}
   }
 
@@ -551,8 +735,7 @@ const App = (() => {
 
     state.debounceTimer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/suggestions?q=${encodeURIComponent(query)}`);
-        const data = await res.json();
+        const data = await api(`/api/suggestions?q=${encodeURIComponent(query)}`);
         renderSuggestions(data.suggestions || []);
       } catch (_) {
         hideSuggestions();
@@ -1214,6 +1397,12 @@ const App = (() => {
         manifestLoadingMaxRetry: 3,
         levelLoadingTimeOut: 20000,
         fragLoadingTimeOut: 30000,
+        xhrSetup: (xhr) => {
+          const token = getAuthToken();
+          if (token) {
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          }
+        },
       });
       state.hlsInstance = hls;
 
@@ -1973,7 +2162,10 @@ const App = (() => {
     initKeyboardEvents();
 
     window.addEventListener('hashchange', handleHashChange);
-    await handleHashChange();
+    const isAuth = await checkAuth();
+    if (isAuth) {
+      await handleHashChange();
+    }
   }
 
   return {
@@ -2021,6 +2213,12 @@ const App = (() => {
     setPlayerAudio,
     setPlaybackSpeed,
     toggleAutoplayNextSetting,
+    handleLoginSubmit,
+    logout,
+    togglePasswordVisibility,
+    showAuthGate,
+    hideAuthGate,
+    checkAuth,
   };
 })();
 
