@@ -2,6 +2,9 @@
   "name": "anistream-2-0",
   "main": "cloudflare-worker/worker.js",
   "compatibility_date": "2024-04-01",
+  "build": {
+    "command": "node scripts/build.js"
+  },
   "assets": {
     "directory": "public",
     "binding": "ASSETS"
