@@ -83,7 +83,12 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
 
 app.post('/api/auth/login', (req, res) => {
   const { id, password } = req.body || {};
-  if (id === AUTH_CONFIG.id && password === AUTH_CONFIG.password) {
+  const inputId = String(id || '').trim();
+  const inputPass = String(password || '').trim();
+  const expectedId = String(AUTH_CONFIG.id).trim();
+  const expectedPass = String(AUTH_CONFIG.password).trim();
+
+  if (inputId === expectedId && inputPass === expectedPass) {
     res.setHeader('Set-Cookie', `anistream_auth=${AUTH_CONFIG.token}; Path=/; Max-Age=2592000; SameSite=Lax`);
     return res.json({
       ok: true,

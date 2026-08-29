@@ -18,9 +18,12 @@ fi
 cd "$WORKER_DIR"
 
 echo "  📦 Deploying worker via Wrangler..."
-npx wrangler deploy
-
-echo ""
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  echo "  🔑 Loading environment variables from .env..."
+  npx wrangler deploy --env-file "$SCRIPT_DIR/.env" --keep-vars
+else
+  npx wrangler deploy --keep-vars
+fi
 echo "  ✅ Deployment complete!"
 echo "  🌐 Your Full-Stack AniStream app is live on Cloudflare Workers!"
 echo "     Access it at your workers.dev URL or bind your custom domain in the Cloudflare Dashboard."

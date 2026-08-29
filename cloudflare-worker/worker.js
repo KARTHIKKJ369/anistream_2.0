@@ -642,8 +642,15 @@ const AUTH_CONFIG = {
   token: 'anistream_auth_token'
 };
 
+function getEnvVal(env, key, fallback = '') {
+  if (env && env[key] !== undefined && env[key] !== null) return String(env[key]).trim();
+  if (typeof globalThis !== 'undefined' && globalThis[key] !== undefined && globalThis[key] !== null) return String(globalThis[key]).trim();
+  if (typeof process !== 'undefined' && process.env && process.env[key] !== undefined && process.env[key] !== null) return String(process.env[key]).trim();
+  return String(fallback).trim();
+}
+
 function verifyAuth(request, env) {
-  const expectedToken = (env && env.AUTH_TOKEN) || AUTH_CONFIG.token;
+  const expectedToken = getEnvVal(env, 'AUTH_TOKEN', AUTH_CONFIG.token);
   const authHeader = request.headers.get('Authorization') || '';
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
   const tokenFromHeader = match ? match[1] : request.headers.get('x-auth-token');
@@ -683,11 +690,13 @@ export default {
     if (url.pathname === '/api/auth/login' && request.method === 'POST') {
       try {
         const body = await request.json();
-        const expectedId = (env && env.AUTH_ID) || AUTH_CONFIG.id;
-        const expectedPass = (env && env.AUTH_PASSWORD) || AUTH_CONFIG.password;
-        const token = (env && env.AUTH_TOKEN) || AUTH_CONFIG.token;
+        const inputId = String((body && body.id) || '').trim();
+        const inputPass = String((body && body.password) || '').trim();
+        const expectedId = getEnvVal(env, 'AUTH_ID', AUTH_CONFIG.id);
+        const expectedPass = getEnvVal(env, 'AUTH_PASSWORD', AUTH_CONFIG.password);
+        const token = getEnvVal(env, 'AUTH_TOKEN', AUTH_CONFIG.token);
 
-        if (body && body.id === expectedId && body.password === expectedPass) {
+        if (inputId === expectedId && inputPass === expectedPass) {
           return jsonRes({
             ok: true,
             token: token,
@@ -705,7 +714,7 @@ export default {
     if (url.pathname === '/api/auth/verify') {
       const isAuth = verifyAuth(request, env);
       if (isAuth) {
-        const expectedId = (env && env.AUTH_ID) || AUTH_CONFIG.id;
+        const expectedId = getEnvVal(env, 'AUTH_ID', AUTH_CONFIG.id);
         return jsonRes({ authenticated: true, user: { id: expectedId, name: expectedId } });
       }
       return jsonRes({ authenticated: false }, 401);
