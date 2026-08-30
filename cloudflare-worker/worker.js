@@ -829,73 +829,78 @@ export default {
       }
 
       const expectedToken = getEnvVal(env, 'AUTH_TOKEN', AUTH_CONFIG.token);
+      const fallbackEmbed = `https://anidb.app/embed/${encodeURIComponent(realEpId)}`;
       try {
         const langUrl = `${ANIDB_BASE}/api/frontend/episode/${realEpId}/languages`;
         const langRes = await fetch(langUrl, { headers: BROWSER_HEADERS });
         
-        if (!langRes.ok) {
-          return jsonRes({ links: [], embedUrl: null, streamType: 'hls' });
-        }
-
-        const langData = await langRes.json();
-        const languages = Array.isArray(langData) ? langData : (langData.languages || []);
-        const targetCode = lang === 'dub' ? 'eng' : 'jpn';
-        const chosen = languages.find(l => l && l.code === targetCode) || languages[0];
-
-        if (!chosen || !chosen.embed_url) {
-          return jsonRes({ links: [], embedUrl: null, streamType: 'hls' });
-        }
-
-        const embedRes = await fetch(chosen.embed_url, { headers: BROWSER_HEADERS });
-        const embedHtml = await embedRes.text();
-
-        const m3u8Match = embedHtml.match(/file:\s*'([^']+\.m3u8[^']*)'/i) || embedHtml.match(/"([^"]+\.m3u8[^"]*)"/i);
+        let chosenEmbed = fallbackEmbed;
         const links = [];
 
-        if (m3u8Match && m3u8Match[1]) {
-          const masterUrl = m3u8Match[1];
+        if (langRes.ok) {
           try {
-            const masterRes = await fetch(masterUrl, { headers: BROWSER_HEADERS });
-            if (masterRes.ok) {
-              const playlistText = await masterRes.text();
-              const lines = playlistText.split('\n');
-              let currentRes = null;
-
-              for (const line of lines) {
-                const trimmed = line.trim();
-                const resMatch = trimmed.match(/RESOLUTION=\d+x(\d+)/i);
-                if (resMatch) {
-                  currentRes = `${resMatch[1]}p`;
-                } else if (trimmed && !trimmed.startsWith('#')) {
-                  const qualUrl = trimmed.startsWith('http') 
-                    ? trimmed 
-                    : new URL(trimmed, masterUrl).toString();
-                  links.push({
-                    quality: currentRes || 'Auto',
-                    url: `${url.origin}/proxy/stream?url=${encodeURIComponent(qualUrl)}&auth=${encodeURIComponent(expectedToken)}`
-                  });
-                  currentRes = null;
-                }
-              }
+            const langData = await langRes.json();
+            const languages = Array.isArray(langData) ? langData : (langData.languages || []);
+            const targetCode = lang === 'dub' ? 'eng' : 'jpn';
+            const chosen = languages.find(l => l && l.code === targetCode) || languages[0];
+            if (chosen && chosen.embed_url) {
+              chosenEmbed = chosen.embed_url;
             }
           } catch (_) {}
-
-          if (links.length === 0) {
-            links.push({
-              quality: '1080p',
-              url: `${url.origin}/proxy/stream?url=${encodeURIComponent(masterUrl)}&auth=${encodeURIComponent(expectedToken)}`
-            });
-          }
         }
+
+        try {
+          const embedRes = await fetch(chosenEmbed, { headers: BROWSER_HEADERS });
+          if (embedRes.ok) {
+            const embedHtml = await embedRes.text();
+            const m3u8Match = embedHtml.match(/file:\s*'([^']+\.m3u8[^']*)'/i) || embedHtml.match(/"([^"]+\.m3u8[^"]*)"/i);
+
+            if (m3u8Match && m3u8Match[1]) {
+              const masterUrl = m3u8Match[1];
+              try {
+                const masterRes = await fetch(masterUrl, { headers: BROWSER_HEADERS });
+                if (masterRes.ok) {
+                  const playlistText = await masterRes.text();
+                  const lines = playlistText.split('\n');
+                  let currentRes = null;
+
+                  for (const line of lines) {
+                    const trimmed = line.trim();
+                    const resMatch = trimmed.match(/RESOLUTION=\d+x(\d+)/i);
+                    if (resMatch) {
+                      currentRes = `${resMatch[1]}p`;
+                    } else if (trimmed && !trimmed.startsWith('#')) {
+                      const qualUrl = trimmed.startsWith('http') 
+                        ? trimmed 
+                        : new URL(trimmed, masterUrl).toString();
+                      links.push({
+                        quality: currentRes || 'Auto',
+                        url: `${url.origin}/proxy/stream?url=${encodeURIComponent(qualUrl)}&auth=${encodeURIComponent(expectedToken)}`
+                      });
+                      currentRes = null;
+                    }
+                  }
+                }
+              } catch (_) {}
+
+              if (links.length === 0) {
+                links.push({
+                  quality: '1080p',
+                  url: `${url.origin}/proxy/stream?url=${encodeURIComponent(masterUrl)}&auth=${encodeURIComponent(expectedToken)}`
+                });
+              }
+            }
+          }
+        } catch (_) {}
 
         return jsonRes({
           links,
-          embedUrl: chosen.embed_url,
+          embedUrl: chosenEmbed,
           streamType: 'hls'
         }, 200, { 'Cache-Control': 'public, max-age=600' });
 
       } catch (err) {
-        return jsonRes({ error: err.message, links: [] }, 500);
+        return jsonRes({ links: [], embedUrl: fallbackEmbed, streamType: 'hls' }, 200);
       }
     }
 
@@ -921,13 +926,16 @@ export default {
 
         const isPlaylist = targetUrl.includes('.m3u8');
         if (!isPlaylist) {
-          const responseHeaders = new Headers(upstream.headers);
-          responseHeaders.set('Access-Control-Allow-Origin', '*');
-          responseHeaders.set('Access-Control-Allow-Headers', '*');
-          responseHeaders.set('Cache-Control', 'public, max-age=86400');
+          // Binary media segment (.ts / .aac / .mp4 / .m4s / .xls)
           return new Response(upstream.body, {
             status: upstream.status,
-            headers: responseHeaders
+            headers: {
+              'Content-Type': targetUrl.includes('.aac') ? 'audio/aac' : 'video/mp2t',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+              'Access-Control-Allow-Headers': '*',
+              'Cache-Control': 'public, max-age=86400'
+            }
           });
         }
 
@@ -951,6 +959,7 @@ export default {
           headers: {
             'Content-Type': 'application/vnd.apple.mpegurl',
             'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
             'Access-Control-Allow-Headers': '*',
             'Cache-Control': 'no-store'
           }

@@ -526,6 +526,7 @@
       <!-- Video Viewport -->
       <div class="player-video-wrap" id="video-wrap">
         <video id="video-player" class="player-video" preload="none" playsinline webkit-playsinline></video>
+        <iframe id="video-iframe" class="player-video hidden" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media" frameborder="0"></iframe>
         
         <!-- Center Loading Indicator -->
         <div class="video-loading" id="video-loading">
@@ -596,20 +597,6 @@
               <button class="btn-icon" onclick="App.toggleSettingsMenu()" title="Settings (S)">[SPECS]</button>
               <button class="btn-icon" onclick="App.showShortcutsModal()" title="Shortcuts (?)">[KEYS]</button>
             </div>
-          </div>
-
-          <!-- Center Quick Controls -->
-          <div class="center-controls" id="center-controls">
-            <button class="center-btn center-seek-btn" onclick="App.seekRelative(-10)" title="Rewind 10s">
-              <span>-10S</span>
-            </button>
-            <button class="center-btn center-play-btn" id="center-play-btn" onclick="App.togglePlay()" title="Play/Pause">
-              <span id="center-icon-play">▶</span>
-              <span id="center-icon-pause" class="hidden">||</span>
-            </button>
-            <button class="center-btn center-seek-btn" onclick="App.seekRelative(10)" title="Forward 10s">
-              <span>+10S</span>
-            </button>
           </div>
           
           <!-- Bottom Controls Bar -->

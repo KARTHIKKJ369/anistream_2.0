@@ -1238,13 +1238,6 @@ const App = (() => {
       const data = await api(streamEndpoint);
       state.streamLinks = data.links || [];
 
-      if (!state.streamLinks.length) {
-        throw new Error(`No stream available for Episode ${ep.episodeNumber} in ${state.currentLang.toUpperCase()}.`);
-      }
-
-      renderQualitySubmenu();
-      const preferred = pickQuality(state.currentQuality);
-
       let resumeTime = 0;
       try {
         const progRes = await api(`/api/progress/${encodeURIComponent(state.currentAnimeId)}`);
@@ -1253,7 +1246,24 @@ const App = (() => {
         }
       } catch (_) {}
 
-      await loadStream(preferred.url, resumeTime);
+      const iframe = $('video-iframe');
+      const video = $('video-player');
+
+      if (state.streamLinks && state.streamLinks.length > 0) {
+        if (iframe) {
+          iframe.src = '';
+          iframe.classList.add('hidden');
+        }
+        if (video) video.classList.remove('hidden');
+        renderQualitySubmenu();
+        const preferred = pickQuality(state.currentQuality);
+        await loadStream(preferred.url, resumeTime);
+      } else if (data.embedUrl || ep.episodeId) {
+        const fallbackEmbed = data.embedUrl || `https://anidb.app/embed/${encodeURIComponent(ep.episodeId)}`;
+        loadEmbedStream(fallbackEmbed);
+      } else {
+        throw new Error(`No stream available for Episode ${ep.episodeNumber} in ${state.currentLang.toUpperCase()}.`);
+      }
 
       await saveProgress(
         ep.episodeNumber,
@@ -1506,6 +1516,32 @@ const App = (() => {
     }
   }
 
+  function loadEmbedStream(embedUrl) {
+    const video = $('video-player');
+    const iframe = $('video-iframe');
+    const loading = $('video-loading');
+    const error = $('video-error');
+
+    destroyHls();
+    if (video) {
+      video.pause();
+      video.classList.add('hidden');
+    }
+    if (error) error.classList.add('hidden');
+    if (loading) loading.classList.remove('hidden');
+
+    if (iframe) {
+      iframe.classList.remove('hidden');
+      iframe.src = embedUrl;
+      iframe.onload = () => {
+        if (loading) loading.classList.add('hidden');
+      };
+      setTimeout(() => {
+        if (loading) loading.classList.add('hidden');
+      }, 3000);
+    }
+  }
+
   function destroyHls() {
     if (state.hlsInstance) {
       try { state.hlsInstance.destroy(); } catch (_) {}
@@ -1611,11 +1647,8 @@ const App = (() => {
 
   function updatePlayPauseIcons(isPlaying) {
     const p = $('icon-play'), pause = $('icon-pause');
-    const cp = $('center-icon-play'), cpause = $('center-icon-pause');
     if (p) p.classList.toggle('hidden', isPlaying);
     if (pause) pause.classList.toggle('hidden', !isPlaying);
-    if (cp) cp.classList.toggle('hidden', isPlaying);
-    if (cpause) cpause.classList.toggle('hidden', !isPlaying);
   }
 
   function toggleMute() {
