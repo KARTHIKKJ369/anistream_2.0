@@ -637,9 +637,9 @@ async function getLiveFeaturedAnime() {
 
 // ─── AUTHENTICATION CONFIG & HELPERS ────────────────────────────────────────
 const AUTH_CONFIG = {
-  id: 'admin',
-  password: 'password',
-  token: 'anistream_auth_token'
+  id: "karthik",
+  password: "karthik@anime",
+  token: "anistream_auth_token_karthik"
 };
 
 function getEnvVal(env, key, fallback = '') {
@@ -828,6 +828,7 @@ export default {
         }
       }
 
+      const expectedToken = getEnvVal(env, 'AUTH_TOKEN', AUTH_CONFIG.token);
       try {
         const langUrl = `${ANIDB_BASE}/api/frontend/episode/${realEpId}/languages`;
         const langRes = await fetch(langUrl, { headers: BROWSER_HEADERS });
@@ -871,7 +872,7 @@ export default {
                     : new URL(trimmed, masterUrl).toString();
                   links.push({
                     quality: currentRes || 'Auto',
-                    url: `${url.origin}/proxy-stream?url=${encodeURIComponent(qualUrl)}`
+                    url: `${url.origin}/proxy/stream?url=${encodeURIComponent(qualUrl)}&auth=${encodeURIComponent(expectedToken)}`
                   });
                   currentRes = null;
                 }
@@ -882,7 +883,7 @@ export default {
           if (links.length === 0) {
             links.push({
               quality: '1080p',
-              url: `${url.origin}/proxy-stream?url=${encodeURIComponent(masterUrl)}`
+              url: `${url.origin}/proxy/stream?url=${encodeURIComponent(masterUrl)}&auth=${encodeURIComponent(expectedToken)}`
             });
           }
         }
@@ -933,12 +934,16 @@ export default {
         const text = await upstream.text();
         const base = targetUrl.replace(/\/[^/?#]+([?#].*)?$/, '/');
         const workerOrigin = url.origin;
+        const expectedToken = getEnvVal(env, 'AUTH_TOKEN', AUTH_CONFIG.token);
 
         const rewritten = text.replace(/^(?!#)([^\r\n]+)/gm, (line) => {
           const trimmed = line.trim();
           if (!trimmed) return line;
           const absolute = trimmed.startsWith('http') ? trimmed : new URL(trimmed, base).toString();
-          return `${workerOrigin}/proxy/stream?url=${encodeURIComponent(absolute)}`;
+          return `${workerOrigin}/proxy/stream?url=${encodeURIComponent(absolute)}&auth=${encodeURIComponent(expectedToken)}`;
+        }).replace(/URI="([^"]+)"/g, (match, p1) => {
+          const absolute = p1.startsWith('http') ? p1 : new URL(p1, base).toString();
+          return `URI="${workerOrigin}/proxy/stream?url=${encodeURIComponent(absolute)}&auth=${encodeURIComponent(expectedToken)}"`;
         });
 
         return new Response(rewritten, {

@@ -276,13 +276,39 @@ const App = (() => {
     return `${m}:${s}`;
   }
 
+  // ─── THEME MANAGER (OLED DARK / WARM LIGHT) ──────────────────────
+  function getTheme() {
+    return localStorage.getItem('anistream_theme') || 'dark';
+  }
+
+  function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('anistream_theme', theme);
+    const label = $('theme-btn-label');
+    if (label) label.textContent = theme === 'light' ? '[LIGHT]' : '[DARK]';
+    const drawerLabel = $('drawer-theme-label');
+    if (drawerLabel) drawerLabel.textContent = `THEME: ${theme.toUpperCase()} (TOGGLE)`;
+  }
+
+  function toggleTheme() {
+    const current = getTheme();
+    const next = current === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    toast(`THEME // ${next.toUpperCase()}`);
+  }
+
+  function initTheme() {
+    setTheme(getTheme());
+  }
+
   function toast(msg, durationMs = 2800) {
     const el = $('toast');
     if (!el) return;
-    el.textContent = msg;
-    el.classList.add('show');
+    const cleanMsg = String(msg || '').replace(/^\[\s*|\s*\]$/g, '').toUpperCase();
+    el.textContent = `[ ${cleanMsg} ]`;
+    el.classList.remove('hidden');
     clearTimeout(state._toastTimer);
-    state._toastTimer = setTimeout(() => el.classList.remove('show'), durationMs);
+    state._toastTimer = setTimeout(() => el.classList.add('hidden'), durationMs);
   }
 
   // ─── API CLIENT ───────────────────────────────────────────────────
@@ -681,9 +707,9 @@ const App = (() => {
         </div>
         <div class="landscape-body">
           <div class="landscape-title">${escHtml(entry.animeTitle)}</div>
-          <div class="landscape-sub">Episode ${escHtml(String(entry.episodeNumber || 1))} • ${progressPercent > 0 ? `${progressPercent}% completed` : 'Watched'}</div>
+          <div class="landscape-sub">EP ${String(entry.episodeNumber || 1).padStart(2, '0')} // ${progressPercent > 0 ? `${progressPercent}% STREAMED` : 'WATCHED'}</div>
         </div>
-        <button class="card-remove-btn" title="Remove" onclick="event.stopPropagation(); App._removeHistory('${escAttr(entry.animeId)}')">✕</button>
+        <button class="card-remove-btn" title="Remove" onclick="event.stopPropagation(); App._removeHistory('${escAttr(entry.animeId)}')">[X]</button>
       `;
       container.appendChild(card);
     });
@@ -703,7 +729,7 @@ const App = (() => {
         <img class="poster-thumb" src="${escHtml(imgSrc)}" alt="${escHtml(title)}" onerror="this.onerror=null; this.src='${DARK_POSTER_PLACEHOLDER}';" loading="lazy" />
         ${item.score ? `
           <span class="poster-score-badge">
-            <svg class="star-icon" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <span>SCORE:</span>
             <span>${escHtml(String(item.score))}</span>
           </span>
         ` : ''}
@@ -711,11 +737,11 @@ const App = (() => {
       <div class="poster-body">
         <div class="poster-title">${escHtml(title)}</div>
         <div class="poster-meta">
-          <span>${escHtml(String(year))}</span>
-          <span style="color:var(--color-crimson); font-weight:700;">Watch →</span>
+          <span>${escHtml(String(year)).toUpperCase()}</span>
+          <span style="color:var(--accent-red); font-weight:700;">STREAM →</span>
         </div>
       </div>
-      ${item.onRemove ? `<button class="card-remove-btn" title="Remove" onclick="event.stopPropagation(); App._removeHistory('${escAttr(item.id)}')">✕</button>` : ''}
+      ${item.onRemove ? `<button class="card-remove-btn" title="Remove" onclick="event.stopPropagation(); App._removeHistory('${escAttr(item.id)}')">[X]</button>` : ''}
     `;
     return card;
   }
@@ -1123,13 +1149,19 @@ const App = (() => {
 
       displayList.forEach((ep) => {
         const actualIdx = allEps.findIndex(e => e.episodeId === ep.episodeId);
-        const btn = document.createElement('button');
-        btn.className = 'ep-btn';
-        if (lastWatched !== null && ep.episodeNumber < lastWatched) btn.classList.add('watched');
-        if (lastWatched !== null && ep.episodeNumber === lastWatched) btn.classList.add('current');
-        btn.textContent = `Ep ${ep.episodeNumber}`;
-        btn.onclick = () => playEpisode(actualIdx >= 0 ? actualIdx : 0);
-        list.appendChild(btn);
+        const card = document.createElement('div');
+        card.className = 'ep-card';
+        if (lastWatched !== null && ep.episodeNumber < lastWatched) card.classList.add('watched');
+        if (lastWatched !== null && ep.episodeNumber === lastWatched) card.classList.add('active');
+        
+        const padNum = String(ep.episodeNumber).padStart(2, '0');
+        const tag = ep.filler ? 'FILLER' : 'EP';
+        card.innerHTML = `
+          <span class="ep-num">${escHtml(padNum)}</span>
+          <span class="ep-tag">${tag}</span>
+        `;
+        card.onclick = () => playEpisode(actualIdx >= 0 ? actualIdx : 0);
+        list.appendChild(card);
       });
     }
   }
@@ -1258,7 +1290,7 @@ const App = (() => {
       const btn = document.createElement('button');
       const isActive = (state.currentQuality === link.quality) || (!state.currentQuality && i === 0);
       btn.className = 'settings-sub-item' + (isActive ? ' active' : '');
-      btn.innerHTML = `<span>${escHtml(link.quality)}</span><span class="settings-check">✓</span>`;
+      btn.innerHTML = `<span>${escHtml(link.quality)}</span><span class="settings-check">[ACTIVE]</span>`;
       btn.onclick = () => switchQuality(link, btn);
       list.appendChild(btn);
     });
@@ -1365,24 +1397,38 @@ const App = (() => {
     const loading = $('video-loading');
     const error = $('video-error');
 
-    loading.classList.remove('hidden');
-    error.classList.add('hidden');
+    if (loading) loading.classList.remove('hidden');
+    if (error) error.classList.add('hidden');
 
     destroyHls();
 
+    const hideLoading = () => {
+      if (loading) loading.classList.add('hidden');
+    };
+
     video.onplaying = () => {
-      loading.classList.add('hidden');
+      hideLoading();
       if (video && state.currentPlaybackRate) video.playbackRate = state.currentPlaybackRate;
     };
-    video.oncanplay = () => loading.classList.add('hidden');
-    video.onloadeddata = () => loading.classList.add('hidden');
-    video.onplay = () => loading.classList.add('hidden');
-    video.onwaiting = () => loading.classList.remove('hidden');
-    video.onerror = () => {
-      loading.classList.add('hidden');
-      error.classList.remove('hidden');
-      $('video-error-text').textContent = 'Playback error occurred. Click Try Again.';
+    video.oncanplay = hideLoading;
+    video.onloadeddata = hideLoading;
+    video.onplay = hideLoading;
+    video.ontimeupdate = () => {
+      if (video.currentTime > 0) hideLoading();
     };
+    video.onwaiting = () => {
+      if (loading && !video.paused) loading.classList.remove('hidden');
+    };
+    video.onerror = () => {
+      hideLoading();
+      if (error) {
+        error.classList.remove('hidden');
+        $('video-error-text').textContent = 'Playback stream connection error. Click Retry.';
+      }
+    };
+
+    // Safety fallback timer: guarantee loading overlay disappears once video buffers
+    setTimeout(hideLoading, 3000);
 
     const targetSource = streamUrl;
 
@@ -1410,18 +1456,17 @@ const App = (() => {
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        loading.classList.add('hidden');
+        hideLoading();
         if (seekTo > 0) video.currentTime = seekTo;
         if (state.currentPlaybackRate) video.playbackRate = state.currentPlaybackRate;
         video.play().catch(e => {
           console.warn('[autoplay notice]', e);
-          loading.classList.add('hidden');
+          hideLoading();
         });
       });
 
-      hls.on(Hls.Events.FRAG_LOADED, () => {
-        loading.classList.add('hidden');
-      });
+      hls.on(Hls.Events.LEVEL_LOADED, hideLoading);
+      hls.on(Hls.Events.FRAG_LOADED, hideLoading);
 
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
@@ -1435,9 +1480,11 @@ const App = (() => {
               break;
             default:
               destroyHls();
-              loading.classList.add('hidden');
-              error.classList.remove('hidden');
-              $('video-error-text').textContent = `Stream error: ${data.details}`;
+              hideLoading();
+              if (error) {
+                error.classList.remove('hidden');
+                $('video-error-text').textContent = `Stream error: ${data.details}`;
+              }
               break;
           }
         }
@@ -1445,15 +1492,17 @@ const App = (() => {
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = targetSource;
       video.addEventListener('loadedmetadata', () => {
-        loading.classList.add('hidden');
+        hideLoading();
         if (seekTo > 0) video.currentTime = seekTo;
         if (state.currentPlaybackRate) video.playbackRate = state.currentPlaybackRate;
-        video.play().catch(() => loading.classList.add('hidden'));
+        video.play().catch(() => hideLoading());
       }, { once: true });
     } else {
-      loading.classList.add('hidden');
-      error.classList.remove('hidden');
-      $('video-error-text').textContent = 'HLS is not supported in this browser.';
+      hideLoading();
+      if (error) {
+        error.classList.remove('hidden');
+        $('video-error-text').textContent = 'HLS is not supported in this browser.';
+      }
     }
   }
 
@@ -1835,19 +1884,20 @@ const App = (() => {
 
       const duration = Date.now() - touchStartTime;
       if (duration < 300) {
-        // User performed a quick tap
+        // Check if double-tapping for seek
         const rect = wrap.getBoundingClientRect();
         const relX = (touchStartX - rect.left) / rect.width;
         const now = Date.now();
 
-        if (relX < 0.38) {
-          // Left Zone: Seek Backward
+        if (relX < 0.32) {
+          // Double-Tap Left Zone: Seek Backward
           if (now - state.lastTapTime < 280 && state.lastTapZone === 'left') {
             clearTimeout(state.singleTapTimer);
             state.lastTapTime = 0;
             state.lastTapZone = null;
             seekRelative(-10);
             showDoubleTapRipple('left');
+            return;
           } else {
             state.lastTapTime = now;
             state.lastTapZone = 'left';
@@ -1856,15 +1906,17 @@ const App = (() => {
               toggleControlsVisibility();
               state.lastTapZone = null;
             }, 280);
+            return;
           }
-        } else if (relX > 0.62) {
-          // Right Zone: Seek Forward
+        } else if (relX > 0.68) {
+          // Double-Tap Right Zone: Seek Forward
           if (now - state.lastTapTime < 280 && state.lastTapZone === 'right') {
             clearTimeout(state.singleTapTimer);
             state.lastTapTime = 0;
             state.lastTapZone = null;
             seekRelative(10);
             showDoubleTapRipple('right');
+            return;
           } else {
             state.lastTapTime = now;
             state.lastTapZone = 'right';
@@ -1873,14 +1925,15 @@ const App = (() => {
               toggleControlsVisibility();
               state.lastTapZone = null;
             }, 280);
+            return;
           }
-        } else {
-          // Middle Zone: Toggle controls visibility (Does NOT pause video!)
-          clearTimeout(state.singleTapTimer);
-          state.lastTapTime = 0;
-          state.lastTapZone = null;
-          toggleControlsVisibility();
         }
+
+        // Anywhere else: Single tap toggles controls visibility
+        clearTimeout(state.singleTapTimer);
+        state.lastTapTime = 0;
+        state.lastTapZone = null;
+        toggleControlsVisibility();
       }
     };
 
@@ -1929,9 +1982,10 @@ const App = (() => {
 
     wrap.addEventListener('click', (e) => {
       if (state.justEndedLongPress) return;
-      if (e.target === video || e.target === wrap) {
-        toggleControlsVisibility();
+      if (e.target.closest('button') || e.target.closest('.player-settings-panel') || e.target.closest('.progress-container') || e.target.closest('input')) {
+        return;
       }
+      toggleControlsVisibility();
     });
 
     // Scrubber Pointer Scrubbing
@@ -1988,25 +2042,39 @@ const App = (() => {
   let controlsTimeout = null;
   let isMouseOverControls = false;
 
-  function resetControlsTimeout() {
+  function toggleControlsVisibility() {
     const controls = $('custom-controls');
     if (!controls) return;
-    controls.classList.remove('idle');
-    document.body.style.cursor = 'default';
-    clearTimeout(controlsTimeout);
-    if (!isMouseOverControls && !state.isScrubbing) {
-      controlsTimeout = setTimeout(hideControls, 3500);
+    const isHidden = controls.classList.contains('hidden-controls') || controls.classList.contains('idle');
+    if (isHidden) {
+      showControls();
+    } else {
+      hideControls(true);
     }
   }
 
-  function hideControls() {
+  function showControls() {
+    const controls = $('custom-controls');
+    if (!controls) return;
+    controls.classList.remove('hidden-controls', 'idle');
+    document.body.style.cursor = 'default';
+    clearTimeout(controlsTimeout);
+    if (!isMouseOverControls && !state.isScrubbing) {
+      controlsTimeout = setTimeout(() => hideControls(false), 4000);
+    }
+  }
+
+  function hideControls(force = false) {
     const video = $('video-player');
     const controls = $('custom-controls');
-    if (isMouseOverControls || state.isScrubbing || state.isSettingsOpen) return;
-    if (video && !video.paused && controls && state.currentView === 'player') {
-      controls.classList.add('idle');
-      document.body.style.cursor = 'none';
-    }
+    if (!controls || state.currentView !== 'player') return;
+    if (!force && (isMouseOverControls || state.isScrubbing || state.isSettingsOpen)) return;
+    controls.classList.add('hidden-controls', 'idle');
+    document.body.style.cursor = 'none';
+  }
+
+  function resetControlsTimeout() {
+    showControls();
   }
 
   // ─── GLOBAL KEYBOARD SHORTCUTS ────────────────────────────────────
@@ -2113,7 +2181,7 @@ const App = (() => {
   }
 
   function hideShortcutsModal(e) {
-    if (e && e.target !== $('shortcuts-modal') && !e.target.classList.contains('btn-icon')) return;
+    if (e && e.target && e.target !== $('shortcuts-modal') && !e.target.closest('.btn-icon')) return;
     const modal = $('shortcuts-modal');
     if (modal) modal.classList.add('hidden');
   }
@@ -2158,6 +2226,7 @@ const App = (() => {
   // ─── INITIALIZATION ──────────────────────────────────────────────
 
   async function init() {
+    initTheme();
     initPlayerEvents();
     initKeyboardEvents();
 
@@ -2219,6 +2288,9 @@ const App = (() => {
     showAuthGate,
     hideAuthGate,
     checkAuth,
+    toggleTheme,
+    setTheme,
+    getTheme,
   };
 })();
 

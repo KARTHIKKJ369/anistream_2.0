@@ -212,7 +212,7 @@ app.get('/api/stream/:episodeId', async (req, res) => {
     if (data && data.links && Array.isArray(data.links)) {
       data.links = data.links.map(l => ({
         ...l,
-        url: (l.url && l.url.startsWith('http')) ? `/proxy/stream?url=${encodeURIComponent(l.url)}` : l.url
+        url: (l.url && l.url.startsWith('http')) ? `/proxy/stream?url=${encodeURIComponent(l.url)}&auth=${encodeURIComponent(AUTH_CONFIG.token)}` : l.url
       }));
     }
     res.json(data);
@@ -409,12 +409,12 @@ app.get('/proxy/stream', async (req, res) => {
       const segUrl = trimmed.startsWith('http://') || trimmed.startsWith('https://')
         ? trimmed
         : (trimmed.startsWith('/') ? `${parsedUrl.origin}${trimmed}` : `${base}${trimmed}`);
-      return `/proxy/stream?url=${encodeURIComponent(segUrl)}`;
+      return `/proxy/stream?url=${encodeURIComponent(segUrl)}&auth=${encodeURIComponent(AUTH_CONFIG.token)}`;
     }).replace(/URI="([^"]+)"/g, (match, p1) => {
       const targetUri = p1.startsWith('http://') || p1.startsWith('https://')
         ? p1
         : (p1.startsWith('/') ? `${parsedUrl.origin}${p1}` : `${base}${p1}`);
-      return `URI="/proxy/stream?url=${encodeURIComponent(targetUri)}"`;
+      return `URI="/proxy/stream?url=${encodeURIComponent(targetUri)}&auth=${encodeURIComponent(AUTH_CONFIG.token)}"`;
     });
 
     return res.send(rewritten);

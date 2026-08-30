@@ -1,17 +1,20 @@
-# AniStream — Design System Specification (MASTER.md)
+# KURO — Nothing-Inspired UI/UX Design System Specification (MASTER.md)
 
-> **Canonical Source of Truth** for AniStream's anti-AI-slop visual universe.
-> Built on the **Otaku Cinema / Midnight Obsidian & Vermilion Crimson** design theses.
+> **Canonical Source of Truth** for KURO's Nothing-inspired industrial anime architecture.
+> Trained in Swiss typography, industrial design (Braun, Teenage Engineering), and modern interface craft.
+> Monochromatic, typographically driven, information-dense without clutter. Dark (OLED) and light mode with equal rigor.
 
 ---
 
-## 1. Visual & Interaction Theses
+## 1. Design Philosophy
 
-### Visual Thesis
-> An abyssal obsidian-black interface (`#0a0a0c`) built on raw dark charcoal surfaces (`#141419`), high-contrast display typography with tight negative tracking, a single vermilion-crimson action accent (`#e11d48`), edge-to-edge cinematic poster artwork with deep surface drop shadows, and zero decorative gradients or soft AI-slop glows.
-
-### Interaction Thesis
-> Fast, cinematic precision transitions (150–250ms `cubic-bezier(0.16, 1, 0.3, 1)`), tactile hover scale on poster frames (`scale(1.02)`), smooth backdrop image cross-fades, instant keyboard navigation (`Space`, `F`, `ArrowKeys`), forbidden patterns: zero elastic bounce, zero decorative floating shapes, zero heavy blur shimmers.
+1. **Subtract, don't add.** Every element must earn its pixel. Default to removal.
+2. **Structure is ornament.** Expose the grid, the data, and the hierarchy itself.
+3. **Monochrome is the canvas.** OLED Pure Black (`#000000`) canvas. Color is an event, not a default.
+4. **Nothing Iconic Red (`#D71921`) is an interrupt.** Used for "look HERE, NOW" events, recording/live dots, and primary triggers.
+5. **Type does the heavy lifting.** Scale, weight, and spacing create hierarchy — Doto (dot-matrix hero), Space Grotesk (geometric sans body), Space Mono (technical uppercase labels/specs).
+6. **Both modes are first-class.** Dark mode: OLED pure black. Light mode: warm technical off-white (`#F5F4F0`).
+7. **Industrial warmth.** Technical and precise, mechanical honesty, physical switch vibes.
 
 ---
 
@@ -19,88 +22,38 @@
 
 ### Color Palette
 
-| Token Name | Hex / Value | Role / Usage |
-|---|---|---|
-| `--color-canvas-obsidian` | `#0a0a0c` | Abyssal background canvas (pure dark) |
-| `--color-surface-1` | `#141419` | Primary card & section surface |
-| `--color-surface-2` | `#1c1c24` | Elevated control surface & input background |
-| `--color-surface-3` | `#262632` | Hover state surface & modal backdrop |
-| `--color-crimson` | `#e11d48` | Single Action Accent (Vermilion Crimson) |
-| `--color-crimson-hover` | `#f43f5e` | Hover state for crimson actions |
-| `--color-crimson-alpha` | `rgba(225, 29, 72, 0.18)` | Soft active background & selection tint |
-| `--color-text-main` | `#f4f4f5` | High-contrast body & headline text |
-| `--color-text-muted` | `#a1a1aa` | Muted metadata, subcopy, and labels |
-| `--color-text-dim` | `#71717a` | Captions, disabled states, and fine print |
-| `--color-hairline` | `rgba(255, 255, 255, 0.08)` | 1px clean razor border |
-| `--color-hairline-crimson` | `rgba(225, 29, 72, 0.4)` | Focused/active border glow |
-| `--color-success` | `#22c55e` | Watched status indicator |
+| Token Name | Dark Mode (OLED) | Light Mode (Warm) | Role / Usage |
+|---|---|---|---|
+| `--bg-canvas` | `#000000` | `#F5F4F0` | Base canvas background |
+| `--bg-surface-1` | `#0c0c0c` | `#EBEAE5` | Base card and section surface |
+| `--bg-surface-2` | `#151515` | `#DFDDD6` | Elevated controls and inputs |
+| `--bg-surface-3` | `#202020` | `#D2D0C7` | Hover state and active tabs |
+| `--text-display` | `#ffffff` | `#000000` | 100% Hero headlines and numbers |
+| `--text-primary` | `#e2e2e2` | `#191919` | 90% Primary body and titles |
+| `--text-secondary` | `#8e8e93` | `#68686C` | 60% Labels, metadata, subheadings |
+| `--text-disabled` | `#505054` | `#9E9EA2` | 40% Disabled and fine print |
+| `--border-hairline` | `rgba(255,255,255,0.12)` | `rgba(0,0,0,0.15)` | 1px razor perimeter border |
+| `--accent-red` | `#D71921` | `#D71921` | Nothing iconic red action interrupt |
+| `--status-success` | `#00D26A` | `#00D26A` | Watched / valid state indicator |
+| `--status-warning` | `#FFB800` | `#FFB800` | Score and alert indicator |
 
-### Typography Scale (Font Stack: `Inter, -apple-system, sans-serif`)
+### Typography Scale
 
-| Token Name | Size | Weight | Line Height | Tracking | Usage |
-|---|---|---|---|---|---|
-| `hero-display` | 48px | 800 | 1.08 | `-0.025em` | Featured Billboard title |
-| `display-lg` | 36px | 800 | 1.12 | `-0.02em` | Section headers & detail title |
-| `display-md` | 24px | 700 | 1.25 | `-0.015em` | Card titles, sub-section headers |
-| `tagline` | 18px | 600 | 1.30 | `-0.01em` | Category titles, metadata titles |
-| `body-strong` | 15px | 600 | 1.40 | `-0.01em` | Bold body, button labels |
-| `body` | 15px | 400 | 1.60 | `0` | Paragraphs, descriptions, specs |
-| `caption` | 13px | 500 | 1.40 | `0` | Metadata badges, episode tags |
-| `fine-print` | 11px | 600 | 1.00 | `0.05em` | Upper-case badges, keyboard hints |
-
-### Spacing System (Base 8px)
-- `spacing-xxs`: 4px
-- `spacing-xs`: 8px
-- `spacing-sm`: 12px
-- `spacing-md`: 16px
-- `spacing-lg`: 24px
-- `spacing-xl`: 32px
-- `spacing-xxl`: 48px
-- `spacing-section`: 64px
+- **Display Hero**: `'Doto', 'Space Grotesk', sans-serif` — variable dot-matrix headlines and hero moments.
+- **UI & Body**: `'Space Grotesk', sans-serif` — geometric sans-serif for content clarity.
+- **Technical & Labels**: `'Space Mono', monospace` — ALL CAPS for metadata, specs, status chips, and controls.
 
 ### Radii Scale
-- `radius-none`: 0px
-- `radius-sm`: 6px
-- `radius-md`: 10px
-- `radius-lg`: 16px
-- `radius-pill`: 9999px
-- `radius-circle`: 50%
 
-### Elevation & Shadows
-- `shadow-poster`: `0 16px 40px rgba(0, 0, 0, 0.8)` (Applied strictly to poster artwork resting on canvas)
-- `shadow-crimson`: `0 4px 20px rgba(225, 29, 72, 0.4)` (Applied to primary crimson CTA buttons)
-- `shadow-dropdown`: `0 20px 50px rgba(0, 0, 0, 0.9)` (Applied to search suggestions dropdown)
-
-### Motion Tokens
-- `duration-fast`: `150ms`
-- `duration-normal`: `220ms`
-- `easing-cinematic`: `cubic-bezier(0.16, 1, 0.3, 1)`
+- `radius-none`: `0px`
+- `radius-sm`: `4px`
+- `radius-md`: `8px`
+- `radius-pill`: `999px`
 
 ---
 
-## 3. Core Component Architecture
+## 3. Mobile First Responsiveness
 
-1. **Top Global Header (`.nav-bar`)**:
-   - Pinned `60px` dark bar (`#0a0a0c` at 90% opacity + `backdrop-filter: blur(16px)`).
-   - Brand logo with crimson badge (`▶ AniStream`).
-   - Clean search input with instant suggestion autocomplete popover.
-
-2. **Featured Billboard (`.billboard-hero`)**:
-   - Full-bleed 16:9 hero section with high-res backdrop banner image.
-   - Dark gradient vignette (`linear-gradient(0deg, #0a0a0c 0%, rgba(10,10,12,0.6) 60%, transparent 100%)`).
-   - Title, score badge (`★ 8.5`), genres, synopsis, and vermilion `▶ Watch Episode 1` button.
-
-3. **Continue Watching Row (`.landscape-grid`)**:
-   - 16:9 Landscape cards with thumbnail + green play overlay button + crimson progress fill bar + episode badge.
-
-4. **Recently Added & Recommendations Grid (`.poster-grid`)**:
-   - 2:3 Portrait cards with `16px` radius, score badge overlay, title, studio info, and `scale(1.02)` hover animation.
-
-5. **Anime Detail View (`.detail-view`)**:
-   - Hero backdrop banner with gradient fade.
-   - 2-Column Metadata Cards Grid: Media Details (Genres, Studio, Format, Status, Year) & Stream Specs (1080p H264, Audio AAC, Subtitles).
-   - Cast & Crew Section: Circular avatars (`90px`, 50% radius) with character name and role.
-   - Episodes grid with watched state badges.
-
-6. **Cinema Video Player (`.player-view`)**:
-   - Edge-to-edge pure obsidian viewport with HLS.js player, episode switcher, quality pills, and keyboard shortcuts (`Space`, `F`, `←`, `→`, `N`, `P`).
+- **Navigation**: Pinned 56px razor top header + mobile bottom navigation bar (`[ GALLERY ]`, `[ SEARCH ]`, `[ ARCHIVE ]`, `[ KEYS ]`).
+- **Touch Optimization**: Minimum 44px tap targets, native touch momentum scrolling, double-tap seek (±10s), long press 2.0x speed.
+- **Safe Area Insets**: Native support for notch and home indicator areas (`env(safe-area-inset-bottom)`).
